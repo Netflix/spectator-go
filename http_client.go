@@ -69,7 +69,8 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
 		"mode":   "http-client",
 	}
 
-	start := h.registry.clock.MonotonicTime()
+	clock := h.registry.clock
+	start := clock.Now()
 	log.Debugf("posting data to %s, payload %s", uri, string(jsonBytes))
 	resp, err := client.Do(req)
 	if err != nil {
@@ -95,7 +96,7 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
 		log.Debugf("request succeeded (%d): %s", resp.StatusCode, body)
 
 	}
-	duration := h.registry.clock.MonotonicTime() - start
-	h.registry.Timer("http.req.complete", tags).Record(duration)
+	elapsed := clock.Now().Sub(start)
+	h.registry.Timer("http.req.complete", tags).Record(elapsed)
 	return
 }

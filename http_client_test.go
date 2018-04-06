@@ -20,7 +20,7 @@ var okMsg, _ = json.Marshal(ok)
 func TestHttpClient_PostJsonOk(t *testing.T) {
 	var log Logger
 	const StartTime = 1
-	clock := &ManualClock{0, StartTime}
+	clock := &ManualClock{StartTime}
 	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -36,7 +36,7 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 		if contentType != "application/json" {
 			t.Errorf("Unexpected content-type: %s", contentType)
 		}
-		clock.monotonic = StartTime + 1000
+		clock.SetNanos(StartTime + 1000)
 	})
 
 	server := httptest.NewServer(publishHandler)
@@ -80,9 +80,9 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	var log Logger
 	const StartTime = 1
 	const Timeout = 1 * time.Millisecond
-	clock := &ManualClock{0, StartTime}
+	clock := &ManualClock{StartTime}
 	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clock.monotonic = StartTime + Timeout + 1
+		clock.SetFromDuration(StartTime + Timeout + 1)
 		time.Sleep(Timeout + time.Millisecond) // trigger timeout
 		r.Body.Close()
 		io.WriteString(w, "\"Should have timed out\"")
@@ -102,7 +102,7 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	statusCode := client.PostJson(config.Uri, []byte("42"))
 	// 400 is our catch all for errors that are results of exceptions
 	if statusCode != 400 {
-		t.Error("Expected 200 response. Got", statusCode)
+		t.Error("Expected 400 response due to timeout. Got", statusCode)
 	}
 
 	meters := registry.Meters()

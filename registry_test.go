@@ -62,7 +62,7 @@ func TestRegistry_Timer(t *testing.T) {
 
 func TestRegistry_Start(t *testing.T) {
 	r := NewRegistry(config)
-	clock := &ManualClock{1, 1}
+	clock := &ManualClock{1}
 	r.clock = clock
 	r.Counter("foo", nil).Increment()
 	r.Start()
@@ -72,7 +72,7 @@ func TestRegistry_Start(t *testing.T) {
 
 func TestRegistry_publish(t *testing.T) {
 	const StartTime = 1
-	clock := &ManualClock{StartTime, StartTime}
+	clock := &ManualClock{StartTime}
 	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		contentType := r.Header.Get("Content-Type")
 		if contentType != "application/json" {
@@ -104,7 +104,7 @@ func TestRegistry_publish(t *testing.T) {
 
 		w.Write(okMsg)
 
-		clock.monotonic = StartTime + 1000
+		clock.SetNanos(StartTime + 1000)
 	})
 
 	server := httptest.NewServer(publishHandler)

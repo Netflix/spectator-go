@@ -13,7 +13,6 @@ aggregator service.
 ## Instrumenting Code
 
 ```go
-
 package main
 
 import (
@@ -40,7 +39,7 @@ type Response struct {
 
 func (s *Server) Handle(request *Request) (res *Response) {
 	clock := s.registry.Clock()
-	start := clock.MonotonicTime()
+	start := clock.Now()
 
 	// initialize res
 	res = &Response{200, 64}
@@ -54,7 +53,7 @@ func (s *Server) Handle(request *Request) (res *Response) {
 	s.registry.CounterWithId(cntId).Increment()
 
 	// ...
-	s.requestLatency.Record(clock.MonotonicTime() - start)
+	s.requestLatency.Record(clock.Now().Sub(start))
 	s.responseSizes.Record(res.size)
 	return
 }
@@ -91,6 +90,7 @@ func main() {
 		server.Handle(req)
 	}
 }
+
 ```
 
 
