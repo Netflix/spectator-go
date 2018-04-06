@@ -1,5 +1,7 @@
 # Spectator-go
 
+> :warning: Experimental
+ 
 Simple library for instrumenting code to record dimensional time series.
 
 ## Description
@@ -15,7 +17,7 @@ aggregator service.
 package main
 
 import (
-	"github.com/dmuino/spectator-go"
+	"github.com/Netflix/spectator-go"
 	"strconv"
 	"time"
 )
