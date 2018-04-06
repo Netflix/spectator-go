@@ -22,6 +22,23 @@ func makeConfig(uri string) *Config {
 
 var config = makeConfig("http://localhost:8080/")
 
+func TestNewRegistryConfiguredBy(t *testing.T) {
+	r, err := NewRegistryConfiguredBy("test_config.json")
+	if err != nil {
+		t.Fatal("Unable to get a registry", err)
+	}
+
+	expectedConfig := Config{
+		5 * time.Second,
+		1 * time.Second,
+		"http://example.org/api/v4/update",
+		map[string]string{"nf.app": "app", "nf.account": "1234"},
+	}
+	if !reflect.DeepEqual(&expectedConfig, r.config) {
+		t.Errorf("Expected config %v, got %v", expectedConfig, r.config)
+	}
+}
+
 func TestRegistry_Counter(t *testing.T) {
 	r := NewRegistry(config)
 	r.Counter("foo", nil).Increment()
