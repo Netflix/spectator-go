@@ -2,6 +2,7 @@ package spectator
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"math"
 	"sort"
 	"sync"
@@ -14,10 +15,10 @@ type Meter interface {
 }
 
 type Config struct {
-	Frequency  time.Duration
-	Timeout    time.Duration
-	Uri        string
-	CommonTags map[string]string
+	Frequency  time.Duration     `json:"frequency"`
+	Timeout    time.Duration     `json:"timeout"`
+	Uri        string            `json:"uri"`
+	CommonTags map[string]string `json:"common_tags"`
 }
 
 type Registry struct {
@@ -29,6 +30,23 @@ type Registry struct {
 	mutex   *sync.Mutex
 	http    *HttpClient
 	quit    chan struct{}
+}
+
+func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
+	bytes, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	err = json.Unmarshal(bytes, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	config.Timeout *= time.Second
+	config.Frequency *= time.Second
+	return NewRegistry(&config), nil
 }
 
 func NewRegistry(config *Config) *Registry {
