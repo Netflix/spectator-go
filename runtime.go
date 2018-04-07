@@ -2,6 +2,7 @@ package spectator
 
 import (
 	"os"
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -19,38 +20,47 @@ func getNumFiles(dir string) int {
 	return len(entries)
 }
 
-type fdStatsCollector struct {
-	registry *Registry
-	curOpen  *Gauge
-	maxOpen  *Gauge
+type sysStatsCollector struct {
+	registry      *Registry
+	curOpen       *Gauge
+	maxOpen       *Gauge
+	numGoroutines *Gauge
 }
 
-func updateFdStats(f *fdStatsCollector, cur int, max uint64) {
-	f.curOpen.Set(float64(cur))
-	f.maxOpen.Set(float64(max))
+func updateFdStats(s *sysStatsCollector, cur int, max uint64) {
+	s.curOpen.Set(float64(cur))
+	s.maxOpen.Set(float64(max))
 }
 
-func fdStats(f *fdStatsCollector) {
+func fdStats(s *sysStatsCollector) {
 	// do not include /proc/self/fd in the count, since it will be opened
 	// when we get the number of files under self/fd
 	currentFdCount := getNumFiles("/proc/self/fd") - 1
 	var rl syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rl); err != nil {
-		f.registry.log.Errorf("Unable to get max open files")
+		s.registry.log.Errorf("Unable to get max open files")
 	}
 	maxFdCount := rl.Cur
-	updateFdStats(f, currentFdCount, maxFdCount)
+	updateFdStats(s, currentFdCount, maxFdCount)
 }
 
-// Collects file handle stats
-func CollectFileHandleStats(registry *Registry) {
-	var f fdStatsCollector
-	f.registry = registry
-	tags := map[string]string{
+func goRuntimeStats(s *sysStatsCollector) {
+	s.numGoroutines.Set(float64(runtime.NumGoroutine()))
+}
+
+// Collects system stats: current/max file handles, number of goroutines
+func CollectSysStats(registry *Registry) {
+	var s sysStatsCollector
+	s.registry = registry
+	fdTags := map[string]string{
 		"id": "fdstats",
 	}
-	f.maxOpen = registry.Gauge("fh.maxOpen", tags)
-	f.curOpen = registry.Gauge("fh.curOpen", tags)
+	goTags := map[string]string{
+		"id": "goRuntime",
+	}
+	s.maxOpen = registry.Gauge("fh.maxOpen", fdTags)
+	s.curOpen = registry.Gauge("fh.curOpen", fdTags)
+	s.numGoroutines = registry.Gauge("go.numGoroutines", goTags)
 
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
@@ -58,8 +68,9 @@ func CollectFileHandleStats(registry *Registry) {
 		for {
 			select {
 			case <-ticker.C:
-				log.Debugf("Collecting file handle stats")
-				fdStats(&f)
+				log.Debugf("Collecting system stats")
+				fdStats(&s)
+				goRuntimeStats(&s)
 			}
 		}
 	}()
@@ -68,5 +79,5 @@ func CollectFileHandleStats(registry *Registry) {
 // Starts the collection of memory and file handle metrics
 func CollectRuntimeMetrics(registry *Registry) {
 	CollectMemStats(registry)
-	CollectFileHandleStats(registry)
+	CollectSysStats(registry)
 }
