@@ -40,9 +40,12 @@ func (t *Timer) TotalTime() int64 {
 
 func (t *Timer) Measure() []Measurement {
 	cnt := Measurement{t.id.WithStat("count"), float64(atomic.SwapInt64(&t.count, 0))}
-	tTime := Measurement{t.id.WithStat("totalTime"), float64(atomic.SwapInt64(&t.totalTime, 0))}
-	tSq := Measurement{t.id.WithStat("totalOfSquares"), swapFloat64(&t.totalOfSquares, 0.0)}
-	mx := Measurement{t.id.WithStat("max"), float64(atomic.SwapInt64(&t.max, 0))}
+	totalNanos := atomic.SwapInt64(&t.totalTime, 0)
+	tTime := Measurement{t.id.WithStat("totalTime"), float64(totalNanos) / 1e9}
+	totalSqNanos := swapFloat64(&t.totalOfSquares, 0.0)
+	tSq := Measurement{t.id.WithStat("totalOfSquares"), totalSqNanos / 1e18}
+	maxNanos := atomic.SwapInt64(&t.max, 0)
+	mx := Measurement{t.id.WithStat("max"), float64(maxNanos) / 1e9}
 
 	return []Measurement{cnt, tTime, tSq, mx}
 }
