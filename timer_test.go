@@ -54,9 +54,9 @@ func assertTimer(t *testing.T, timer *Timer, count int64, total int64, totalSq f
 
 	expected := make(map[uint64]float64)
 	expected[timer.id.WithStat("count").Hash()] = float64(count)
-	expected[timer.id.WithStat("totalTime").Hash()] = float64(total)
-	expected[timer.id.WithStat("totalOfSquares").Hash()] = totalSq
-	expected[timer.id.WithStat("max").Hash()] = float64(max)
+	expected[timer.id.WithStat("totalTime").Hash()] = float64(total) / 1e9
+	expected[timer.id.WithStat("totalOfSquares").Hash()] = totalSq / 1e18
+	expected[timer.id.WithStat("max").Hash()] = float64(max) / 1e9
 
 	got := make(map[uint64]float64)
 	for _, v := range ms {
