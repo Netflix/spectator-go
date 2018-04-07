@@ -117,6 +117,10 @@ func shouldSendMeasurement(measurement Measurement) bool {
 }
 
 func (r *Registry) publish() {
+	if len(r.config.Uri) == 0 {
+		return
+	}
+
 	var measurements []Measurement
 
 	r.mutex.Lock()
@@ -149,12 +153,13 @@ func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measu
 
 	strings["name"] = 0
 	for _, measure := range measurements {
+		strings[measure.id.name] = 0
 		for k, v := range measure.id.tags {
 			strings[k] = 0
 			strings[v] = 0
 		}
 	}
-	var sortedStrings []string
+	sortedStrings := make([]string, 0, len(strings))
 	for s := range strings {
 		sortedStrings = append(sortedStrings, s)
 	}
@@ -164,8 +169,8 @@ func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measu
 	}
 	*payload = append(*payload, len(strings))
 	// can't append the strings in one call since we can't convert []string to []interface{}
-	for i := range sortedStrings {
-		*payload = append(*payload, sortedStrings[i])
+	for _, s := range sortedStrings {
+		*payload = append(*payload, s)
 	}
 
 	return strings

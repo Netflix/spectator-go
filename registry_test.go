@@ -20,7 +20,7 @@ func makeConfig(uri string) *Config {
 		}}
 }
 
-var config = makeConfig("http://localhost:8080/")
+var config = makeConfig("")
 
 func TestNewRegistryConfiguredBy(t *testing.T) {
 	r, err := NewRegistryConfiguredBy("test_config.json")
@@ -87,6 +87,47 @@ func TestRegistry_Start(t *testing.T) {
 	r.Stop()
 }
 
+type payloadEntry struct {
+	tags  map[string]string
+	op    int
+	value float64
+}
+
+func getEntry(strings []string, payload []interface{}) (numConsumed int, entry payloadEntry) {
+	numTags := int(payload[0].(float64))
+	tags := make(map[string]string, numTags)
+	for i := 1; i < numTags*2; i += 2 {
+		keyIdx := int(payload[i].(float64))
+		valIdx := int(payload[i+1].(float64))
+		tags[strings[keyIdx]] = strings[valIdx]
+	}
+	entry.tags = tags
+	entry.op = int(payload[numTags*2+1].(float64))
+	entry.value = payload[numTags*2+2].(float64)
+	numConsumed = numTags*2 + 3
+	return
+}
+
+func payloadToEntries(t *testing.T, payload []interface{}) []payloadEntry {
+	numStrings := int(payload[0].(float64))
+	var strings = make([]string, numStrings, numStrings)
+	for i := 1; i <= numStrings; i++ {
+		strings[i-1] = payload[i].(string)
+	}
+
+	var entries []payloadEntry
+	curIdx := numStrings + 1
+	for curIdx < len(payload) {
+		numConsumed, entry := getEntry(strings[:], payload[curIdx:])
+		if numConsumed == 0 {
+			t.Fatalf("Could not decode payload. Last index: %d - remaining %v", curIdx, payload[curIdx:])
+		}
+		entries = append(entries, entry)
+		curIdx += numConsumed
+	}
+	return entries
+}
+
 func TestRegistry_publish(t *testing.T) {
 	const StartTime = 1
 	clock := &ManualClock{StartTime}
@@ -107,16 +148,21 @@ func TestRegistry_publish(t *testing.T) {
 		}
 		expected := []interface{}{
 			// string table
-			11.0, "count", "name", "nf.app", "nf.asg", "nf.cluster", "nf.region", "statistic", "test", "test-main", "test-main-v001", "us-west-1",
+			12.0, "count", "name", "foo", "nf.app", "nf.asg", "nf.cluster", "nf.region", "statistic", "test", "test-main", "test-main-v001", "us-west-1",
 			// one measurement: a counter with value 10
-			6.0, 2.0, 7.0, 4.0, 8.0, 3.0, 9.0, 5.0, 10.0, 6.0, 0.0, 1.0, 0.0,
+			6.0, // 4 common tags, name, statistic
+			//
+			3.0, 8.0, 5.0, 9.0, 4.0, 10.0, 6.0, 11.0, 7.0, 0.0, 1.0, 2.0,
 			// op is 0 = add
 			0.0,
 			// delta is 10
 			10.0}
 
-		if !reflect.DeepEqual(expected, payload) {
-			t.Errorf("Expected payload %v, got %v", expected, payload)
+		expectedEntries := payloadToEntries(t, expected)
+		payloadEntries := payloadToEntries(t, payload)
+
+		if !reflect.DeepEqual(expectedEntries, payloadEntries) {
+			t.Errorf("Expected payload:\n %v\ngot:\n %v", expectedEntries, payloadEntries)
 		}
 
 		w.Write(okMsg)
