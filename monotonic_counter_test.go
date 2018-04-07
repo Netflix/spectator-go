@@ -15,7 +15,7 @@ func TestNewMonotonicCounter(t *testing.T) {
 	}
 
 	c.Set(42)
-	if v := c.Count() ; v != 42 {
+	if v := c.Count(); v != 42 {
 		t.Errorf("Expected 42, got %d", v)
 	}
 

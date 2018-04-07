@@ -4,9 +4,9 @@ import "sync/atomic"
 
 type MonotonicCounter struct {
 	registry *Registry
-	id *Id
-	value int64
-	counter *Counter
+	id       *Id
+	value    int64
+	counter  *Counter
 }
 
 func NewMonotonicCounter(registry *Registry, name string, tags map[string]string) *MonotonicCounter {
