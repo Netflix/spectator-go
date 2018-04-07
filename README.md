@@ -71,6 +71,7 @@ func getNextRequest() *Request {
 	// ...
 	return &Request{"US"}
 }
+
 func main() {
 	commonTags := map[string]string{"nf.app": "example", "nf.region": "us-west-1"}
 	config := &spectator.Config{Frequency: 5 * time.Second, Timeout: 1 * time.Second,
@@ -81,6 +82,9 @@ func main() {
 	// registry.SetLogger(logger)
 	registry.Start()
 	defer registry.Stop()
+
+	// collect memory and file descriptor metrics
+	spectator.CollectRuntimeMetrics(registry)
 
 	server := newServer(registry)
 
