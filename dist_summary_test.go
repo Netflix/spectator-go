@@ -54,20 +54,20 @@ func assertDistributionSummary(t *testing.T, d *DistributionSummary, count int64
 		t.Error("Expected 4 measurements from a DistributionSummary, got ", len(ms))
 	}
 
-	expected := make(map[uint64]float64)
-	expected[d.id.WithStat("count").Hash()] = float64(count)
-	expected[d.id.WithStat("totalAmount").Hash()] = float64(total)
-	expected[d.id.WithStat("totalOfSquares").Hash()] = totalSq
-	expected[d.id.WithStat("max").Hash()] = float64(max)
+	expected := make(map[string]float64)
+	expected[d.id.WithStat("count").mapKey()] = float64(count)
+	expected[d.id.WithStat("totalAmount").mapKey()] = float64(total)
+	expected[d.id.WithStat("totalOfSquares").mapKey()] = totalSq
+	expected[d.id.WithStat("max").mapKey()] = float64(max)
 
-	got := make(map[uint64]float64)
+	got := make(map[string]float64)
 	for _, v := range ms {
-		got[v.id.Hash()] = v.value
+		got[v.id.mapKey()] = v.value
 	}
 	if !reflect.DeepEqual(got, expected) {
-		t.Error("Expected measurements (count=", count, ",total=", total, ",totalSq=", totalSq, ",max=", max, ")")
+		t.Errorf("Expected measurements (count=%d, total=%d, totalSq=%.0f, max=%d)", count, total, totalSq, max)
 		for _, m := range ms {
-			t.Error("Got ", m.id.name, " ", m.id.tags, "=", m.value)
+			t.Errorf("Got %s %v = %f", m.id.name, m.id.tags, m.value)
 		}
 	}
 

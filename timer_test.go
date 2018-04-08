@@ -52,20 +52,20 @@ func assertTimer(t *testing.T, timer *Timer, count int64, total int64, totalSq f
 		t.Error("Expected 4 measurements from a Timer, got ", len(ms))
 	}
 
-	expected := make(map[uint64]float64)
-	expected[timer.id.WithStat("count").Hash()] = float64(count)
-	expected[timer.id.WithStat("totalTime").Hash()] = float64(total) / 1e9
-	expected[timer.id.WithStat("totalOfSquares").Hash()] = totalSq / 1e18
-	expected[timer.id.WithStat("max").Hash()] = float64(max) / 1e9
+	expected := make(map[string]float64)
+	expected[timer.id.WithStat("count").mapKey()] = float64(count)
+	expected[timer.id.WithStat("totalTime").mapKey()] = float64(total) / 1e9
+	expected[timer.id.WithStat("totalOfSquares").mapKey()] = totalSq / 1e18
+	expected[timer.id.WithStat("max").mapKey()] = float64(max) / 1e9
 
-	got := make(map[uint64]float64)
+	got := make(map[string]float64)
 	for _, v := range ms {
-		got[v.id.Hash()] = v.value
+		got[v.id.mapKey()] = v.value
 	}
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("Expected measurements (count=%d, total=%d, totalSq=%.0f, max=%d)", count, total, totalSq, max)
 		for _, m := range ms {
-			t.Error("Got ", m.id.name, " ", m.id.tags, "=", m.value)
+			t.Errorf("Got %s %v = %f", m.id.name, m.id.tags, m.value)
 		}
 	}
 
