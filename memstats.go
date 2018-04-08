@@ -36,10 +36,9 @@ func updateMemStats(m *memStatsCollector, mem *runtime.MemStats) {
 	m.objectsAllocated.Set(int64(mem.Mallocs))
 	m.objectsFreed.Set(int64(mem.Frees))
 
-	if mem.LastGC != m.gcLastPauseTimeValue {
-		m.gcPauseTime.Record(time.Duration(mem.LastGC - m.gcLastPauseTimeValue))
-		m.gcLastPauseTimeValue = mem.LastGC
-	}
+	nanosPause := mem.PauseTotalNs - m.gcLastPauseTimeValue
+	m.gcPauseTime.Record(time.Duration(nanosPause))
+	m.gcLastPauseTimeValue = mem.PauseTotalNs
 
 	nanos := m.registry.clock.Nanos()
 	timeSinceLastGC := nanos - int64(mem.LastGC)
@@ -51,10 +50,7 @@ func updateMemStats(m *memStatsCollector, mem *runtime.MemStats) {
 	m.gcPercCpu.Set(mem.GCCPUFraction * 100)
 }
 
-// Collect memory stats
-// https://golang.org/pkg/runtime/#MemStats
-func CollectMemStats(registry *Registry) {
-	var mem memStatsCollector
+func initializeMemStatsCollector(registry *Registry, mem *memStatsCollector) {
 	tags := map[string]string{
 		"id": "memstats",
 	}
@@ -70,6 +66,13 @@ func CollectMemStats(registry *Registry) {
 	mem.gcCount = NewMonotonicCounter(registry, "gc.count", tags)
 	mem.forcedGcCount = NewMonotonicCounter(registry, "gc.forcedCount", tags)
 	mem.gcPercCpu = registry.Gauge("gc.cpuPercentage", tags)
+}
+
+// Collect memory stats
+// https://golang.org/pkg/runtime/#MemStats
+func CollectMemStats(registry *Registry) {
+	var mem memStatsCollector
+	initializeMemStatsCollector(registry, &mem)
 
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {

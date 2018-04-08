@@ -120,24 +120,25 @@ func shouldSendMeasurement(measurement Measurement) bool {
 	return s == "gauge" || v > 0
 }
 
+func (r *Registry) getMeasurements() []Measurement {
+	var measurements []Measurement
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	for _, meter := range r.meters {
+		for _, measure := range meter.Measure() {
+			if shouldSendMeasurement(measure) {
+				measurements = append(measurements, measure)
+			}
+		}
+	}
+	return measurements
+}
 func (r *Registry) publish() {
 	if len(r.config.Uri) == 0 {
 		return
 	}
 
-	var measurements []Measurement
-
-	r.mutex.Lock()
-	{
-		for _, meter := range r.meters {
-			for _, measure := range meter.Measure() {
-				if shouldSendMeasurement(measure) {
-					measurements = append(measurements, measure)
-				}
-			}
-		}
-		r.mutex.Unlock()
-	}
+	measurements := r.getMeasurements()
 	r.log.Debugf("Measurements: %v", measurements)
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
