@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/Netflix/spectator-go.svg?branch=master)](https://travis-ci.org/Netflix/spectator-go) 
 # Spectator-go
 
 > :warning: Experimental
