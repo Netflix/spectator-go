@@ -76,6 +76,10 @@ func (r *Registry) SetLogger(logger Logger) {
 }
 
 func (r *Registry) Start() {
+	if r.config == nil || r.config.Uri == "" {
+		r.log.Infof("Registry config has no uri.  Ingnoring Start request.")
+		return
+	}
 	if r.started {
 		r.log.Infof("Registry has already started. Ignoring Start request.")
 		return
