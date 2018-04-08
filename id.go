@@ -1,25 +1,25 @@
 package spectator
 
 import (
-	"crypto/md5"
+	"bytes"
 	"fmt"
-	"math/big"
 	"sort"
 )
 
 type Id struct {
 	name string
 	tags map[string]string
-	hash uint64
+	key  string
 }
 
-func (id *Id) Hash() uint64 {
-	if id.hash != 0 {
-		return id.hash
+// computes and saves a key to be used to address Ids in maps
+func (id *Id) mapKey() string {
+	if len(id.key) > 0 {
+		return id.key
 	}
 
-	hasher := md5.New()
-	hasher.Write([]byte(id.name))
+	var buf bytes.Buffer
+	buf.WriteString(id.name)
 	var keys []string
 	for k := range id.tags {
 		keys = append(keys, k)
@@ -28,22 +28,20 @@ func (id *Id) Hash() uint64 {
 
 	for _, k := range keys {
 		v := id.tags[k]
-		hasher.Write([]byte("|"))
-		hasher.Write([]byte(k))
-		hasher.Write([]byte("|"))
-		hasher.Write([]byte(v))
+		buf.WriteRune('|')
+		buf.WriteString(k)
+		buf.WriteRune('|')
+		buf.WriteString(v)
 	}
-	res := big.NewInt(0)
-	res.SetBytes(hasher.Sum(nil)[:8])
-	id.hash = res.Uint64()
-	return id.hash
+	id.key = buf.String()
+	return id.key
 }
 
 func newId(name string, tags map[string]string) *Id {
 	if tags == nil {
 		tags = map[string]string{}
 	}
-	return &Id{name, tags, 0}
+	return &Id{name, tags, ""}
 }
 
 func (id *Id) WithTag(key string, value string) *Id {

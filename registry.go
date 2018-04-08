@@ -24,7 +24,7 @@ type Config struct {
 type Registry struct {
 	clock   Clock
 	config  *Config
-	meters  map[uint64]Meter
+	meters  map[string]Meter
 	started bool
 	log     Logger
 	mutex   *sync.Mutex
@@ -50,7 +50,7 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 }
 
 func NewRegistry(config *Config) *Registry {
-	r := &Registry{&SystemClock{}, config, map[uint64]Meter{}, false,
+	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
 		defaultLogger(), &sync.Mutex{}, nil, make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	return r
@@ -235,10 +235,10 @@ type meterFactoryFun func() Meter
 func (r *Registry) newMeter(id *Id, meterFactory meterFactoryFun) Meter {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	meter, exists := r.meters[id.Hash()]
+	meter, exists := r.meters[id.mapKey()]
 	if !exists {
 		meter = meterFactory()
-		r.meters[id.Hash()] = meter
+		r.meters[id.mapKey()] = meter
 	}
 	return meter
 }
