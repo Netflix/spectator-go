@@ -52,15 +52,9 @@ func goRuntimeStats(s *sysStatsCollector) {
 func CollectSysStats(registry *Registry) {
 	var s sysStatsCollector
 	s.registry = registry
-	fdTags := map[string]string{
-		"id": "fdstats",
-	}
-	goTags := map[string]string{
-		"id": "goRuntime",
-	}
-	s.maxOpen = registry.Gauge("fh.maxOpen", fdTags)
-	s.curOpen = registry.Gauge("fh.curOpen", fdTags)
-	s.numGoroutines = registry.Gauge("go.numGoroutines", goTags)
+	s.maxOpen = registry.Gauge("fh.allocated", nil)
+	s.curOpen = registry.Gauge("fh.max", nil)
+	s.numGoroutines = registry.Gauge("go.numGoroutines", nil)
 
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
