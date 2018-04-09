@@ -116,8 +116,8 @@ func shouldSendMeasurement(measurement Measurement) bool {
 	if math.IsNaN(v) {
 		return false
 	}
-	s := measurement.id.tags["statistic"]
-	return s == "gauge" || v > 0
+	isGauge := opFromTags(measurement.id.tags) == maxOp
+	return isGauge || v > 0
 }
 
 func (r *Registry) getMeasurements() []Measurement {
