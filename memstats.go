@@ -51,21 +51,18 @@ func updateMemStats(m *memStatsCollector, mem *runtime.MemStats) {
 }
 
 func initializeMemStatsCollector(registry *Registry, mem *memStatsCollector) {
-	tags := map[string]string{
-		"id": "memstats",
-	}
 	mem.registry = registry
-	mem.bytesAlloc = registry.Gauge("mem.heapBytesAllocated", tags)
-	mem.allocationRate = NewMonotonicCounter(registry, "mem.allocationRate", tags)
-	mem.totalBytesSystem = registry.Gauge("mem.maxHeapBytes", tags)
-	mem.numLiveObjects = registry.Gauge("mem.numLiveObjects", tags)
-	mem.objectsAllocated = NewMonotonicCounter(registry, "mem.objectsAllocated", tags)
-	mem.objectsFreed = NewMonotonicCounter(registry, "mem.objectsFreed", tags)
-	mem.gcPauseTime = registry.Timer("gc.pauseTime", tags)
-	mem.gcAge = registry.Gauge("gc.timeSinceLastGC", tags)
-	mem.gcCount = NewMonotonicCounter(registry, "gc.count", tags)
-	mem.forcedGcCount = NewMonotonicCounter(registry, "gc.forcedCount", tags)
-	mem.gcPercCpu = registry.Gauge("gc.cpuPercentage", tags)
+	mem.bytesAlloc = registry.Gauge("mem.heapBytesAllocated", nil)
+	mem.allocationRate = NewMonotonicCounter(registry, "mem.allocationRate", nil)
+	mem.totalBytesSystem = registry.Gauge("mem.maxHeapBytes", nil)
+	mem.numLiveObjects = registry.Gauge("mem.numLiveObjects", nil)
+	mem.objectsAllocated = NewMonotonicCounter(registry, "mem.objectsAllocated", nil)
+	mem.objectsFreed = NewMonotonicCounter(registry, "mem.objectsFreed", nil)
+	mem.gcPauseTime = registry.Timer("gc.pauseTime", nil)
+	mem.gcAge = registry.Gauge("gc.timeSinceLastGC", nil)
+	mem.gcCount = NewMonotonicCounter(registry, "gc.count", nil)
+	mem.forcedGcCount = NewMonotonicCounter(registry, "gc.forcedCount", nil)
+	mem.gcPercCpu = registry.Gauge("gc.cpuPercentage", nil)
 }
 
 // Collect memory stats
