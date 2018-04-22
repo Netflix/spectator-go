@@ -28,7 +28,6 @@ func TestId_mapKeySortsTags(t *testing.T) {
 		tags[k] = "v"
 	}
 	id := newId("foo", tags)
-	k := id.mapKey()
 
 	var buf bytes.Buffer
 	buf.WriteString("foo")
@@ -37,6 +36,7 @@ func TestId_mapKeySortsTags(t *testing.T) {
 		buf.WriteString(k)
 	}
 
+	k := id.mapKey()
 	if k != buf.String() {
 		t.Errorf("Expected %s, got %s", buf.String(), k)
 	}

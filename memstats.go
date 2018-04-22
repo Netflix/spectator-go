@@ -74,12 +74,9 @@ func CollectMemStats(registry *Registry) {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
 		log := registry.log
-		for {
-			select {
-			case <-ticker.C:
-				log.Debugf("Collecting memory stats")
-				memStats(&mem)
-			}
+		for range ticker.C {
+			log.Debugf("Collecting memory stats")
+			memStats(&mem)
 		}
 	}()
 }

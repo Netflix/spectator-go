@@ -110,7 +110,7 @@ func getEntry(strings []string, payload []interface{}) (numConsumed int, entry p
 
 func payloadToEntries(t *testing.T, payload []interface{}) []payloadEntry {
 	numStrings := int(payload[0].(float64))
-	var strings = make([]string, numStrings, numStrings)
+	var strings = make([]string, numStrings)
 	for i := 1; i <= numStrings; i++ {
 		strings[i-1] = payload[i].(string)
 	}

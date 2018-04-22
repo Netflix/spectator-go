@@ -17,7 +17,6 @@ func addFloat64(addr *uint64, delta float64) {
 			break
 		}
 	}
-	return
 }
 
 func updateMax(addr *int64, v int64) {
