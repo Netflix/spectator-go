@@ -87,7 +87,7 @@ func (r *Registry) Start() {
 
 	r.started = true
 	r.quit = make(chan struct{})
-	ticker := time.NewTicker(time.Duration(r.config.Frequency))
+	ticker := time.NewTicker(r.config.Frequency)
 	go func() {
 		for {
 			select {
@@ -278,7 +278,7 @@ func (r *Registry) TimerWithId(id *Id) *Timer {
 		return t
 	}
 
-	r.log.Errorf("Unable to register a timer with name=%s,tags=%v - a meter %v exists", id, t)
+	r.log.Errorf("Unable to register a timer with %v - a meter %v exists", id, t)
 
 	// throw in strict mode
 	return NewTimer(id)

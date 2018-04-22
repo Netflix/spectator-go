@@ -1,3 +1,10 @@
 language: go
 go:
   - "1.10"
+install:
+  - go get -t ./...
+  - go get -u github.com/alecthomas/gometalinter
+  - gometalinter --install
+script:
+  - go test -v
+  - gometalinter -D golint ./...

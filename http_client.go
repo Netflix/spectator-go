@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 type HttpClient struct {
@@ -29,34 +31,41 @@ func userFriendlyErr(errStr string) string {
 	return "HttpErr"
 }
 
-func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
+func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, error) {
 	const JsonType = "application/json"
 	const CompressThreshold = 512
-	statusCode = 400
-	var buf bytes.Buffer
-	payloadBuffer := &buf
-	log := h.registry.log
 	compressed := len(jsonBytes) > CompressThreshold
+	var payloadBuffer *bytes.Buffer
 	if compressed {
+		payloadBuffer = &bytes.Buffer{}
 		g := gzip.NewWriter(payloadBuffer)
 		if _, err := g.Write(jsonBytes); err != nil {
-			log.Errorf("Unable to compress json payload: %v", err)
-			return
+			return nil, errors.Wrap(err, "Unable to compress json payload")
 		}
 		if err := g.Close(); err != nil {
-			log.Errorf("Unable to close gzip stream: %v", err)
-			return
+			return nil, errors.Wrap(err, "Unable to close gzip stream")
 		}
 	} else {
 		payloadBuffer = bytes.NewBuffer(jsonBytes)
 	}
+
 	req, err := http.NewRequest("POST", uri, payloadBuffer)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("User-Agent", "spectator-go")
 	req.Header.Set("Accept", JsonType)
 	req.Header.Set("Content-Type", JsonType)
 	if compressed {
 		req.Header.Set("Content-Encoding", "gzip")
 	}
+	return req, nil
+}
+
+func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
+	statusCode = 400
+	log := h.registry.log
+	req, err := h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {
 		panic(err)
 	}
@@ -88,7 +97,11 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
 		tags["statusCode"] = tags["status"]
 		log.Errorf("Unable to POST to %s: %v", uri, err)
 	} else {
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				log.Errorf("Unable to close body: %v", err)
+			}
+		}()
 		statusCode = resp.StatusCode
 		tags["statusCode"] = strconv.Itoa(resp.StatusCode)
 		tags["status"] = fmt.Sprintf("%dxx", resp.StatusCode/100)

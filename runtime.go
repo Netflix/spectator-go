@@ -7,17 +7,25 @@ import (
 	"time"
 )
 
-func getNumFiles(dir string) int {
-	f, err := os.Open(dir)
+func getNumFiles(dir string) (n int, err error) {
+	var f *os.File
+	var entries []string
+
+	f, err = os.Open(dir)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	defer f.Close()
-	entries, err := f.Readdirnames(-1)
+	defer func() {
+		if e := f.Close(); err != nil && e != nil {
+			err = e
+		}
+	}()
+
+	entries, err = f.Readdirnames(-1)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return len(entries)
+	return len(entries), err
 }
 
 type sysStatsCollector struct {
@@ -35,10 +43,15 @@ func updateFdStats(s *sysStatsCollector, cur int, max uint64) {
 func fdStats(s *sysStatsCollector) {
 	// do not include /proc/self/fd in the count, since it will be opened
 	// when we get the number of files under self/fd
-	currentFdCount := getNumFiles("/proc/self/fd") - 1
+	currentFdCount, err := getNumFiles("/proc/self/fd")
+	currentFdCount--
+	if err != nil {
+		s.registry.log.Errorf("Unable to get open files: %v", err)
+	}
+
 	var rl syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rl); err != nil {
-		s.registry.log.Errorf("Unable to get max open files")
+		s.registry.log.Errorf("Unable to get max open files: %v", err)
 	}
 	maxFdCount := rl.Cur
 	updateFdStats(s, currentFdCount, maxFdCount)
@@ -59,13 +72,10 @@ func CollectSysStats(registry *Registry) {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
 		log := registry.log
-		for {
-			select {
-			case <-ticker.C:
-				log.Debugf("Collecting system stats")
-				fdStats(&s)
-				goRuntimeStats(&s)
-			}
+		for range ticker.C {
+			log.Debugf("Collecting system stats")
+			fdStats(&s)
+			goRuntimeStats(&s)
 		}
 	}()
 }
