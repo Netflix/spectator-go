@@ -27,6 +27,28 @@ func TestCounter_Increment(t *testing.T) {
 	}
 }
 
+func TestCounter_AddFloat(t *testing.T) {
+	c := getCounter("addFloat")
+	if c.Count() != 0 {
+		t.Error("Count should start at 0, got ", c.Count())
+	}
+
+	c.AddFloat(4.2)
+	if c.Count() != 4.2 {
+		t.Error("Count should be 4.2, got ", c.Count())
+	}
+
+	c.AddFloat(-0.1)
+	if c.Count() != 4.2 {
+		t.Error("Negative deltas should be ignored, got ", c.Count())
+	}
+
+	c.AddFloat(4.2)
+	if c.Count() != 8.4 {
+		t.Error("Expected 84, got ", c.Count())
+	}
+}
+
 func TestCounter_Add(t *testing.T) {
 	c := getCounter("add")
 	if c.Count() != 0 {
