@@ -7,4 +7,4 @@ install:
   - gometalinter --install
 script:
   - go test -v
-  - gometalinter -D golint ./... || true
+  - gometalinter -D golint ./... 

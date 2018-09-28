@@ -19,7 +19,11 @@ func (id *Id) mapKey() string {
 	}
 
 	var buf bytes.Buffer
-	buf.WriteString(id.name)
+	_, err := buf.WriteString(id.name)
+	const errKey = "ERR"
+	if err != nil {
+		return errKey
+	}
 	var keys []string
 	for k := range id.tags {
 		keys = append(keys, k)
@@ -28,10 +32,22 @@ func (id *Id) mapKey() string {
 
 	for _, k := range keys {
 		v := id.tags[k]
-		buf.WriteRune('|')
-		buf.WriteString(k)
-		buf.WriteRune('|')
-		buf.WriteString(v)
+		_, err = buf.WriteRune('|')
+		if err != nil {
+			return errKey
+		}
+		_, err = buf.WriteString(k)
+		if err != nil {
+			return errKey
+		}
+		_, err = buf.WriteRune('|')
+		if err != nil {
+			return errKey
+		}
+		_, err = buf.WriteString(v)
+		if err != nil {
+			return errKey
+		}
 	}
 	id.key = buf.String()
 	return id.key
