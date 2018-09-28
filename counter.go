@@ -1,10 +1,8 @@
 package spectator
 
-import "sync/atomic"
-
 type Counter struct {
 	id    *Id
-	count int64
+	count uint64
 }
 
 func NewCounter(id *Id) *Counter {
@@ -16,20 +14,26 @@ func (c *Counter) MeterId() *Id {
 }
 
 func (c *Counter) Measure() []Measurement {
-	cnt := atomic.SwapInt64(&c.count, 0)
+	cnt := swapFloat64(&c.count, 0.0)
 	return []Measurement{{c.id.WithStat("count"), float64(cnt)}}
 }
 
 func (c *Counter) Increment() {
-	atomic.AddInt64(&c.count, 1)
+	addFloat64(&c.count, 1)
+}
+
+func (c *Counter) AddFloat(delta float64) {
+	if delta > 0.0 {
+		addFloat64(&c.count, delta)
+	}
 }
 
 func (c *Counter) Add(delta int64) {
 	if delta > 0 {
-		atomic.AddInt64(&c.count, delta)
+		addFloat64(&c.count, float64(delta))
 	}
 }
 
-func (c *Counter) Count() int64 {
-	return atomic.LoadInt64(&c.count)
+func (c *Counter) Count() float64 {
+	return loadFloat64(&c.count)
 }
