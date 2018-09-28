@@ -30,6 +30,6 @@ func TestNewMonotonicCounter(t *testing.T) {
 	}
 
 	if v := c.counter.Count(); v != 10 {
-		t.Errorf("Delta should be 10, got %d", v)
+		t.Errorf("Delta should be 10, got %f", v)
 	}
 }
