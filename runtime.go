@@ -11,6 +11,7 @@ func getNumFiles(dir string) (n int, err error) {
 	var f *os.File
 	var entries []string
 
+	/* #nosec G304 */
 	f, err = os.Open(dir)
 	if err != nil {
 		return 0, err

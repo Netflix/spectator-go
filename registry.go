@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"math"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -33,7 +34,9 @@ type Registry struct {
 }
 
 func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
-	bytes, err := ioutil.ReadFile(filePath)
+	path := filepath.Clean(filePath)
+	/* #nosec G304 */
+	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -139,12 +142,16 @@ func (r *Registry) publish() {
 	}
 
 	measurements := r.getMeasurements()
-	r.log.Debugf("Measurements: %v", measurements)
+	r.log.Debugf("Got %d measurements", len(measurements))
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
 		r.log.Errorf("Unable to convert measurements to json: %v", err)
 	} else {
-		r.http.PostJson(r.config.Uri, jsonBytes)
+		var status int
+		status, err = r.http.PostJson(r.config.Uri, jsonBytes)
+		if status != 200 || err != nil {
+			r.log.Errorf("Could not POST measurements: %d %v", status, err)
+		}
 	}
 }
 

@@ -62,10 +62,11 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 	return req, nil
 }
 
-func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
+func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err error) {
 	statusCode = 400
 	log := h.registry.log
-	req, err := h.createPayloadRequest(uri, jsonBytes)
+	var req *http.Request
+	req, err = h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {
 		panic(err)
 	}
@@ -98,16 +99,20 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int) {
 		log.Errorf("Unable to POST to %s: %v", uri, err)
 	} else {
 		defer func() {
-			if err := resp.Body.Close(); err != nil {
+			if err = resp.Body.Close(); err != nil {
 				log.Errorf("Unable to close body: %v", err)
 			}
 		}()
 		statusCode = resp.StatusCode
 		tags["statusCode"] = strconv.Itoa(resp.StatusCode)
 		tags["status"] = fmt.Sprintf("%dxx", resp.StatusCode/100)
-		body, _ := ioutil.ReadAll(resp.Body)
+		var body []byte
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Errorf("Unable to read response body: %v", err)
+			return
+		}
 		log.Debugf("request succeeded (%d): %s", resp.StatusCode, body)
-
 	}
 	elapsed := clock.Now().Sub(start)
 	h.registry.Timer("http.req.complete", tags).Record(elapsed)

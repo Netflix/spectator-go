@@ -50,7 +50,11 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 	log = registry.log
 	client := NewHttpClient(registry, 100*time.Millisecond)
 
-	statusCode := client.PostJson(config.Uri, []byte("42"))
+	statusCode, err := client.PostJson(config.Uri, []byte("42"))
+	if err != nil {
+		t.Error("Unexpected error", err)
+	}
+
 	if statusCode != 200 {
 		t.Error("Expected 200 response. Got", statusCode)
 	}
@@ -99,10 +103,10 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	log = registry.log
 	client := NewHttpClient(registry, Timeout)
 
-	statusCode := client.PostJson(config.Uri, []byte("42"))
+	statusCode, err := client.PostJson(config.Uri, []byte("42"))
 	// 400 is our catch all for errors that are results of exceptions
-	if statusCode != 400 {
-		t.Error("Expected 400 response due to timeout. Got", statusCode)
+	if statusCode != 400 || err == nil {
+		t.Error("Expected 400 response due to timeout, with error set. Got", statusCode)
 	}
 
 	meters := registry.Meters()
