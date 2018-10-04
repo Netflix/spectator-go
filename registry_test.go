@@ -11,7 +11,7 @@ import (
 )
 
 func makeConfig(uri string) *Config {
-	return &Config{10 * time.Millisecond, 1 * time.Second, uri,
+	return &Config{10 * time.Millisecond, 1 * time.Second, uri, 10000,
 		map[string]string{
 			"nf.app":     "test",
 			"nf.cluster": "test-main",
@@ -32,6 +32,7 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 		5 * time.Second,
 		1 * time.Second,
 		"http://example.org/api/v4/update",
+		10000,
 		map[string]string{"nf.app": "app", "nf.account": "1234"},
 	}
 	if !reflect.DeepEqual(&expectedConfig, r.config) {
