@@ -19,6 +19,7 @@ type Config struct {
 	Frequency  time.Duration     `json:"frequency"`
 	Timeout    time.Duration     `json:"timeout"`
 	Uri        string            `json:"uri"`
+	BatchSize  int               `json:"batch_size"`
 	CommonTags map[string]string `json:"common_tags"`
 }
 
@@ -136,13 +137,9 @@ func (r *Registry) getMeasurements() []Measurement {
 	}
 	return measurements
 }
-func (r *Registry) publish() {
-	if len(r.config.Uri) == 0 {
-		return
-	}
 
-	measurements := r.getMeasurements()
-	r.log.Debugf("Got %d measurements", len(measurements))
+func (r* Registry) sendBatch(measurements []Measurement) {
+	r.log.Debugf("Sending %d measurements to %s", len(measurements), r.config.Uri)
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
 		r.log.Errorf("Unable to convert measurements to json: %v", err)
@@ -152,6 +149,22 @@ func (r *Registry) publish() {
 		if status != 200 || err != nil {
 			r.log.Errorf("Could not POST measurements: %d %v", status, err)
 		}
+	}
+}
+
+func (r *Registry) publish() {
+	if len(r.config.Uri) == 0 {
+		return
+	}
+
+	measurements := r.getMeasurements()
+	r.log.Debugf("Got %d measurements", len(measurements))
+	for i := 0; i < len(measurements); i += r.config.BatchSize {
+		end := i + r.config.BatchSize
+		if end > len(measurements) {
+			end = len(measurements)
+		}
+		r.sendBatch(measurements[i:end])
 	}
 }
 
