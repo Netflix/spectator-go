@@ -147,7 +147,7 @@ func (r* Registry) sendBatch(measurements []Measurement) {
 		var status int
 		status, err = r.http.PostJson(r.config.Uri, jsonBytes)
 		if status != 200 || err != nil {
-			r.log.Errorf("Could not POST measurements: %d %v", status, err)
+			r.log.Errorf("Could not POST measurements: HTTP %d %v", status, err)
 		}
 	}
 }

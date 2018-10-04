@@ -81,7 +81,7 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 
 	clock := h.registry.clock
 	start := clock.Now()
-	log.Debugf("posting data to %s, payload %s", uri, string(jsonBytes))
+	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
 	resp, err := client.Do(req)
 	if err != nil {
 		if urlerr, ok := err.(*url.Error); ok {
@@ -112,7 +112,7 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 			log.Errorf("Unable to read response body: %v", err)
 			return
 		}
-		log.Debugf("request succeeded (%d): %s", resp.StatusCode, body)
+		log.Debugf("response HTTP %d: %s", resp.StatusCode, body)
 	}
 	elapsed := clock.Now().Sub(start)
 	h.registry.Timer("http.req.complete", tags).Record(elapsed)
