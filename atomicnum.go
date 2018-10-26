@@ -7,7 +7,7 @@ import (
 
 func addFloat64(addr *uint64, delta float64) {
 	for {
-		old := math.Float64frombits(*addr)
+		old := loadFloat64(addr)
 		newVal := old + delta
 		if atomic.CompareAndSwapUint64(
 			addr,
