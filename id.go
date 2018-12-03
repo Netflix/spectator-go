@@ -54,10 +54,13 @@ func (id *Id) mapKey() string {
 }
 
 func newId(name string, tags map[string]string) *Id {
-	if tags == nil {
-		tags = map[string]string{}
+	var myTags = make(map[string]string)
+	if tags != nil {
+		for k, v := range tags {
+			myTags[k] = v
+		}
 	}
-	return &Id{name, tags, ""}
+	return &Id{name, myTags, ""}
 }
 
 func (id *Id) WithTag(key string, value string) *Id {
