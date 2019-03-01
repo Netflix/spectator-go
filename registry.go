@@ -21,6 +21,7 @@ type Config struct {
 	Uri        string            `json:"uri"`
 	BatchSize  int               `json:"batch_size"`
 	CommonTags map[string]string `json:"common_tags"`
+	IsEnabled func() bool
 }
 
 type Registry struct {
@@ -54,6 +55,9 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 }
 
 func NewRegistry(config *Config) *Registry {
+	if config.IsEnabled == nil {
+		config.IsEnabled = func() bool { return true }
+	}
 	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
 		defaultLogger(), &sync.Mutex{}, nil, make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
@@ -159,6 +163,10 @@ func (r *Registry) publish() {
 
 	measurements := r.getMeasurements()
 	r.log.Debugf("Got %d measurements", len(measurements))
+	if !r.config.IsEnabled() {
+		return
+	}
+
 	for i := 0; i < len(measurements); i += r.config.BatchSize {
 		end := i + r.config.BatchSize
 		if end > len(measurements) {
