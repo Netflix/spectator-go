@@ -2,6 +2,7 @@ package spectator
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,9 @@ func makeConfig(uri string) *Config {
 			"nf.cluster": "test-main",
 			"nf.asg":     "test-main-v001",
 			"nf.region":  "us-west-1",
-		}}
+		},
+		nil,
+	}
 }
 
 var config = makeConfig("")
@@ -34,9 +37,12 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 		"http://example.org/api/v4/update",
 		10000,
 		map[string]string{"nf.app": "app", "nf.account": "1234"},
+		nil,
 	}
-	if !reflect.DeepEqual(&expectedConfig, r.config) {
-		t.Errorf("Expected config %v, got %v", expectedConfig, r.config)
+	cfg := r.config
+	cfg.IsEnabled = nil
+	if !reflect.DeepEqual(&expectedConfig, cfg) {
+		t.Errorf("Expected config %v, got %v", expectedConfig, cfg)
 	}
 }
 
@@ -182,4 +188,53 @@ func TestRegistry_publish(t *testing.T) {
 
 	r.Counter("foo", nil).Add(10)
 	r.publish()
+}
+
+func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
+	if a != b {
+		msg := fmt.Sprintf("%v != %v", a, b)
+		if len(message) > 0 {
+			msg = fmt.Sprintf("%s (%s)", message, msg)
+		}
+		t.Fatal(msg)
+	}
+}
+
+func TestRegistry_enabled(t *testing.T) {
+	called := 0
+	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called++
+	})
+
+	server := httptest.NewServer(publishHandler)
+	defer server.Close()
+
+	serverUrl := server.URL
+
+	cfg := makeConfig(serverUrl)
+	enabled := true
+	cfg.IsEnabled = func() bool {
+		return enabled
+	}
+	r := NewRegistry(cfg)
+
+	r.Counter("foo", nil).Add(10)
+	r.publish()
+
+	assertEqual(t, called, 1, "expected 1 publish call")
+
+	r.Counter("foo", nil).Add(10)
+	r.publish()
+
+	assertEqual(t, called, 2, "expected 2 publish calls")
+
+	enabled = false
+	r.Counter("foo", nil).Add(10)
+	r.publish()
+	assertEqual(t, called, 2, "expected no extra publish calls")
+
+	enabled = true
+	r.Counter("foo", nil).Add(10)
+	r.publish()
+	assertEqual(t, called, 3, "expected 3 publish calls")
 }
