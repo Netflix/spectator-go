@@ -10,3 +10,11 @@ type Measurement struct {
 func (m Measurement) String() string {
 	return fmt.Sprintf("M{id=%v, value=%f}", m.id, m.value)
 }
+
+func (m Measurement) Id() *Id {
+	return m.id
+}
+
+func (m Measurement) Value() float64 {
+	return m.value
+}

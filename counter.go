@@ -15,7 +15,7 @@ func (c *Counter) MeterId() *Id {
 
 func (c *Counter) Measure() []Measurement {
 	cnt := swapFloat64(&c.count, 0.0)
-	return []Measurement{{c.id.WithStat("count"), cnt}}
+	return []Measurement{{c.id.WithDefaultStat("count"), cnt}}
 }
 
 func (c *Counter) Increment() {
