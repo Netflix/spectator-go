@@ -34,8 +34,8 @@ func (t *Timer) Count() int64 {
 	return atomic.LoadInt64(&t.count)
 }
 
-func (t *Timer) TotalTime() int64 {
-	return atomic.LoadInt64(&t.totalTime)
+func (t *Timer) TotalTime() time.Duration {
+	return time.Duration(atomic.LoadInt64(&t.totalTime))
 }
 
 func (t *Timer) Measure() []Measurement {

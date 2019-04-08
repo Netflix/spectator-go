@@ -76,6 +76,40 @@ func (id *Id) WithStat(stat string) *Id {
 	return id.WithTag("statistic", stat)
 }
 
+func (id *Id) WithDefaultStat(stat string) *Id {
+	s := id.tags["statistic"]
+	if s == "" {
+		return id.WithTag("statistic", stat)
+	} else {
+		return id
+	}
+}
+
 func (id *Id) String() string {
 	return fmt.Sprintf("Id{name=%s,tags=%v}", id.name, id.tags)
+}
+
+func (id *Id) Name() string {
+	return id.name
+}
+
+func (id *Id) Tags() map[string]string {
+	return id.tags
+}
+
+func (id *Id) WithTags(tags map[string]string) *Id {
+	if len(tags) == 0 {
+		return id
+	}
+
+	newTags := make(map[string]string)
+
+	for k, v := range id.tags {
+		newTags[k] = v
+	}
+
+	for k, v := range tags {
+		newTags[k] = v
+	}
+	return newId(id.name, newTags)
 }

@@ -16,7 +16,7 @@ func (g *Gauge) MeterId() *Id {
 }
 
 func (g *Gauge) Measure() []Measurement {
-	return []Measurement{{g.id.WithStat("gauge"), swapFloat64(&g.valueBits, math.NaN())}}
+	return []Measurement{{g.id.WithDefaultStat("gauge"), swapFloat64(&g.valueBits, math.NaN())}}
 }
 
 func (g *Gauge) Set(value float64) {

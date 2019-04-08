@@ -21,7 +21,7 @@ type Config struct {
 	Uri        string            `json:"uri"`
 	BatchSize  int               `json:"batch_size"`
 	CommonTags map[string]string `json:"common_tags"`
-	IsEnabled func() bool
+	IsEnabled  func() bool
 }
 
 type Registry struct {
@@ -128,7 +128,7 @@ func shouldSendMeasurement(measurement Measurement) bool {
 	return isGauge || v > 0
 }
 
-func (r *Registry) getMeasurements() []Measurement {
+func (r *Registry) Measurements() []Measurement {
 	var measurements []Measurement
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -142,7 +142,7 @@ func (r *Registry) getMeasurements() []Measurement {
 	return measurements
 }
 
-func (r* Registry) sendBatch(measurements []Measurement) {
+func (r *Registry) sendBatch(measurements []Measurement) {
 	r.log.Debugf("Sending %d measurements to %s", len(measurements), r.config.Uri)
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
@@ -161,7 +161,7 @@ func (r *Registry) publish() {
 		return
 	}
 
-	measurements := r.getMeasurements()
+	measurements := r.Measurements()
 	r.log.Debugf("Got %d measurements", len(measurements))
 	if !r.config.IsEnabled() {
 		return
