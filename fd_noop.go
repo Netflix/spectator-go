@@ -1,4 +1,4 @@
-// +build windows
+// +build !linux
 
 package spectator
 
@@ -7,9 +7,9 @@ func getNumFiles(dir string) (n int, err error) {
 }
 
 func updateFdStats(s *sysStatsCollector, cur int, max uint64) {
-	// do nothing on Windows
+	// do nothing
 }
 
 func fdStats(s *sysStatsCollector) {
-	// do nothing on Windows
+	// do nothing
 }

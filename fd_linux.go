@@ -1,5 +1,3 @@
-// +build !windows,!freebsd
-
 package spectator
 
 import (
