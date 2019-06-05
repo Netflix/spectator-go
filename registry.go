@@ -55,11 +55,15 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 }
 
 func NewRegistry(config *Config) *Registry {
+	return NewRegistryWithLogger(config, defaultLogger())
+}
+
+func NewRegistryWithLogger(config *Config, logger Logger) *Registry {
 	if config.IsEnabled == nil {
 		config.IsEnabled = func() bool { return true }
 	}
 	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
-		defaultLogger(), &sync.Mutex{}, nil, make(chan struct{})}
+		logger, &sync.Mutex{}, nil, make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	return r
 }
@@ -101,7 +105,7 @@ func (r *Registry) Start() {
 			select {
 			case <-ticker.C:
 				// send measurements
-				r.log.Infof("Sending measurements")
+				r.log.Debugf("Sending measurements")
 				r.publish()
 			case <-r.quit:
 				ticker.Stop()
