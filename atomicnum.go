@@ -25,6 +25,7 @@ func updateMax(addr *int64, v int64) {
 		if atomic.CompareAndSwapInt64(addr, m, v) {
 			break
 		}
+		m = atomic.LoadInt64(addr)
 	}
 }
 
