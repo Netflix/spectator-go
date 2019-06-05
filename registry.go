@@ -210,7 +210,6 @@ func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measu
 }
 
 const (
-	unknownOp = -1
 	addOp     = 0
 	maxOp     = 10
 )
@@ -219,34 +218,27 @@ func opFromTags(tags map[string]string) int {
 	switch tags["statistic"] {
 	case "count", "totalAmount", "totalTime", "totalOfSquares", "percentile":
 		return addOp
-	case "max", "gauge", "activeTasks", "duration":
-		return maxOp
 	default:
-		return unknownOp
+		return maxOp
 	}
 }
 
 func (r *Registry) appendMeasurement(payload *[]interface{}, strings map[string]int, m Measurement) {
 	op := opFromTags(m.id.tags)
-	if op != unknownOp {
-		commonTags := r.config.CommonTags
-		*payload = append(*payload, len(m.id.tags)+1+len(commonTags))
-		for k, v := range commonTags {
-			*payload = append(*payload, strings[k])
-			*payload = append(*payload, strings[v])
-		}
-		for k, v := range m.id.tags {
-			*payload = append(*payload, strings[k])
-			*payload = append(*payload, strings[v])
-		}
-		*payload = append(*payload, strings["name"])
-		*payload = append(*payload, strings[m.id.name])
-		*payload = append(*payload, op)
-		*payload = append(*payload, m.value)
-	} else {
-		r.log.Infof("Invalid statistic for id=%v", m.id)
+	commonTags := r.config.CommonTags
+	*payload = append(*payload, len(m.id.tags)+1+len(commonTags))
+	for k, v := range commonTags {
+		*payload = append(*payload, strings[k])
+		*payload = append(*payload, strings[v])
 	}
-
+	for k, v := range m.id.tags {
+		*payload = append(*payload, strings[k])
+		*payload = append(*payload, strings[v])
+	}
+	*payload = append(*payload, strings["name"])
+	*payload = append(*payload, strings[m.id.name])
+	*payload = append(*payload, op)
+	*payload = append(*payload, m.value)
 }
 
 func (r *Registry) measurementsToJson(measurements []Measurement) ([]byte, error) {
