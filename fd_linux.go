@@ -38,12 +38,12 @@ func fdStats(s *sysStatsCollector) {
 	currentFdCount, err := getNumFiles("/proc/self/fd")
 	currentFdCount--
 	if err != nil {
-		s.registry.log.Errorf("Unable to get open files: %v", err)
+		s.registry.config.Log.Errorf("Unable to get open files: %v", err)
 	}
 
 	var rl syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rl); err != nil {
-		s.registry.log.Errorf("Unable to get max open files: %v", err)
+		s.registry.config.Log.Errorf("Unable to get max open files: %v", err)
 	}
 	maxFdCount := rl.Cur
 	updateFdStats(s, currentFdCount, maxFdCount)

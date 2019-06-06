@@ -64,7 +64,7 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 
 func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err error) {
 	statusCode = 400
-	log := h.registry.log
+	log := h.registry.config.Log
 	var req *http.Request
 	req, err = h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {

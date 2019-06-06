@@ -21,6 +21,7 @@ type Config struct {
 	Uri        string            `json:"uri"`
 	BatchSize  int               `json:"batch_size"`
 	CommonTags map[string]string `json:"common_tags"`
+	Log        Logger
 	IsEnabled  func() bool
 }
 
@@ -29,7 +30,6 @@ type Registry struct {
 	config  *Config
 	meters  map[string]Meter
 	started bool
-	log     Logger
 	mutex   *sync.Mutex
 	http    *HttpClient
 	quit    chan struct{}
@@ -55,15 +55,11 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 }
 
 func NewRegistry(config *Config) *Registry {
-	return NewRegistryWithLogger(config, defaultLogger())
-}
-
-func NewRegistryWithLogger(config *Config, logger Logger) *Registry {
 	if config.IsEnabled == nil {
 		config.IsEnabled = func() bool { return true }
 	}
 	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
-		logger, &sync.Mutex{}, nil, make(chan struct{})}
+		&sync.Mutex{}, nil, make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	return r
 }
@@ -84,16 +80,16 @@ func (r *Registry) Clock() Clock {
 }
 
 func (r *Registry) SetLogger(logger Logger) {
-	r.log = logger
+	r.config.Log = logger
 }
 
 func (r *Registry) Start() {
 	if r.config == nil || r.config.Uri == "" {
-		r.log.Infof("Registry config has no uri. Ignoring Start request.")
+		r.config.Log.Infof("Registry config has no uri. Ignoring Start request.")
 		return
 	}
 	if r.started {
-		r.log.Infof("Registry has already started. Ignoring Start request.")
+		r.config.Log.Infof("Registry has already started. Ignoring Start request.")
 		return
 	}
 
@@ -105,11 +101,11 @@ func (r *Registry) Start() {
 			select {
 			case <-ticker.C:
 				// send measurements
-				r.log.Debugf("Sending measurements")
+				r.config.Log.Debugf("Sending measurements")
 				r.publish()
 			case <-r.quit:
 				ticker.Stop()
-				r.log.Infof("Send last updates and quit")
+				r.config.Log.Infof("Send last updates and quit")
 				return
 			}
 		}
@@ -147,15 +143,15 @@ func (r *Registry) Measurements() []Measurement {
 }
 
 func (r *Registry) sendBatch(measurements []Measurement) {
-	r.log.Debugf("Sending %d measurements to %s", len(measurements), r.config.Uri)
+	r.config.Log.Debugf("Sending %d measurements to %s", len(measurements), r.config.Uri)
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
-		r.log.Errorf("Unable to convert measurements to json: %v", err)
+		r.config.Log.Errorf("Unable to convert measurements to json: %v", err)
 	} else {
 		var status int
 		status, err = r.http.PostJson(r.config.Uri, jsonBytes)
 		if status != 200 || err != nil {
-			r.log.Errorf("Could not POST measurements: HTTP %d %v", status, err)
+			r.config.Log.Errorf("Could not POST measurements: HTTP %d %v", status, err)
 		}
 	}
 }
@@ -166,7 +162,7 @@ func (r *Registry) publish() {
 	}
 
 	measurements := r.Measurements()
-	r.log.Debugf("Got %d measurements", len(measurements))
+	r.config.Log.Debugf("Got %d measurements", len(measurements))
 	if !r.config.IsEnabled() {
 		return
 	}
@@ -282,7 +278,7 @@ func (r *Registry) CounterWithId(id *Id) *Counter {
 		return c
 	}
 
-	r.log.Errorf("Unable to register a counter with id=%v - a meter %v exists", id, c)
+	r.config.Log.Errorf("Unable to register a counter with id=%v - a meter %v exists", id, c)
 
 	// should throw in strict mode
 	return NewCounter(id)
@@ -302,7 +298,7 @@ func (r *Registry) TimerWithId(id *Id) *Timer {
 		return t
 	}
 
-	r.log.Errorf("Unable to register a timer with %v - a meter %v exists", id, t)
+	r.config.Log.Errorf("Unable to register a timer with %v - a meter %v exists", id, t)
 
 	// throw in strict mode
 	return NewTimer(id)
@@ -322,7 +318,7 @@ func (r *Registry) GaugeWithId(id *Id) *Gauge {
 		return g
 	}
 
-	r.log.Errorf("Unable to register a gauge with id=%v - a meter %v exists", id, g)
+	r.config.Log.Errorf("Unable to register a gauge with id=%v - a meter %v exists", id, g)
 
 	// throw in strict mode
 	return NewGauge(id)
@@ -342,7 +338,7 @@ func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
 		return d
 	}
 
-	r.log.Errorf("Unable to register a distribution summary with id=%v - a meter %v exists", id, d)
+	r.config.Log.Errorf("Unable to register a distribution summary with id=%v - a meter %v exists", id, d)
 
 	// throw in strict mode
 	return NewDistributionSummary(id)
