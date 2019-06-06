@@ -20,6 +20,7 @@ func makeConfig(uri string) *Config {
 			"nf.region":  "us-west-1",
 		},
 		nil,
+		nil,
 	}
 }
 
@@ -37,6 +38,7 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 		"http://example.org/api/v4/update",
 		10000,
 		map[string]string{"nf.app": "app", "nf.account": "1234"},
+		defaultLogger(),
 		nil,
 	}
 	cfg := r.config

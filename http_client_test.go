@@ -47,7 +47,7 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 	config := makeConfig(serverUrl)
 	registry := NewRegistry(config)
 	registry.clock = clock
-	log = registry.log
+	log = registry.config.Log
 	client := NewHttpClient(registry, 100*time.Millisecond)
 
 	statusCode, err := client.PostJson(config.Uri, []byte("42"))
@@ -100,7 +100,7 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	config := makeConfig(serverUrl)
 	registry := NewRegistry(config)
 	registry.clock = clock
-	log = registry.log
+	log = registry.config.Log
 	client := NewHttpClient(registry, Timeout)
 
 	statusCode, err := client.PostJson(config.Uri, []byte("42"))
