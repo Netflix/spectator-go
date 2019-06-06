@@ -58,6 +58,10 @@ func NewRegistry(config *Config) *Registry {
 	if config.IsEnabled == nil {
 		config.IsEnabled = func() bool { return true }
 	}
+	if config.Log == nil {
+		config.Log = defaultLogger()
+	}
+
 	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
 		&sync.Mutex{}, nil, make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
