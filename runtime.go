@@ -26,7 +26,7 @@ func CollectSysStats(registry *Registry) {
 
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
-		log := registry.log
+		log := registry.config.Log
 		for range ticker.C {
 			log.Debugf("Collecting system stats")
 			fdStats(&s)
