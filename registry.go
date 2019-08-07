@@ -255,9 +255,9 @@ func (r *Registry) measurementsToJson(measurements []Measurement) ([]byte, error
 	return json.Marshal(payload)
 }
 
-type meterFactoryFun func() Meter
+type MeterFactoryFun func() Meter
 
-func (r *Registry) newMeter(id *Id, meterFactory meterFactoryFun) Meter {
+func (r *Registry) NewMeter(id *Id, meterFactory MeterFactoryFun) Meter {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	meter, exists := r.meters[id.mapKey()]
@@ -273,7 +273,7 @@ func (r *Registry) NewId(name string, tags map[string]string) *Id {
 }
 
 func (r *Registry) CounterWithId(id *Id) *Counter {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewCounter(id)
 	})
 
@@ -293,7 +293,7 @@ func (r *Registry) Counter(name string, tags map[string]string) *Counter {
 }
 
 func (r *Registry) TimerWithId(id *Id) *Timer {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewTimer(id)
 	})
 
@@ -313,7 +313,7 @@ func (r *Registry) Timer(name string, tags map[string]string) *Timer {
 }
 
 func (r *Registry) GaugeWithId(id *Id) *Gauge {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewGauge(id)
 	})
 
@@ -333,7 +333,7 @@ func (r *Registry) Gauge(name string, tags map[string]string) *Gauge {
 }
 
 func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewDistributionSummary(id)
 	})
 
