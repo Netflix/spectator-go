@@ -2,6 +2,7 @@ package spectator
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"path/filepath"
@@ -87,14 +88,16 @@ func (r *Registry) SetLogger(logger Logger) {
 	r.config.Log = logger
 }
 
-func (r *Registry) Start() {
+func (r *Registry) Start() error {
 	if r.config == nil || r.config.Uri == "" {
-		r.config.Log.Infof("Registry config has no uri. Ignoring Start request.")
-		return
+		err := fmt.Sprintf("registry config has no uri. Ignoring Start request")
+		r.config.Log.Infof(err)
+		return fmt.Errorf(err)
 	}
 	if r.started {
-		r.config.Log.Infof("Registry has already started. Ignoring Start request.")
-		return
+		err := fmt.Sprintf("registry has already started. Ignoring Start request")
+		r.config.Log.Infof(err)
+		return fmt.Errorf(err)
 	}
 
 	r.started = true
@@ -114,6 +117,8 @@ func (r *Registry) Start() {
 			}
 		}
 	}()
+
+	return nil
 }
 
 func (r *Registry) Stop() {
@@ -214,8 +219,8 @@ func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measu
 }
 
 const (
-	addOp     = 0
-	maxOp     = 10
+	addOp = 0
+	maxOp = 10
 )
 
 func opFromTags(tags map[string]string) int {
