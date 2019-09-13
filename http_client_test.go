@@ -71,7 +71,7 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 		"method":     "POST",
 		"mode":       "http-client",
 	}
-	expectedId := newId("http.req.complete", expectedTags)
+	expectedId := NewId("http.req.complete", expectedTags)
 	gotMeter := meters[0]
 	if expectedId.name != gotMeter.MeterId().name || !reflect.DeepEqual(expectedTags, gotMeter.MeterId().tags) {
 		log.Errorf("Unexpected meter registered. Expecting %v. Got %v", expectedId, gotMeter.MeterId())
@@ -121,7 +121,7 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 		"method":     "POST",
 		"mode":       "http-client",
 	}
-	expectedId := newId("http.req.complete", expectedTags)
+	expectedId := NewId("http.req.complete", expectedTags)
 	gotMeter := meters[0]
 	if expectedId.name != gotMeter.MeterId().name || !reflect.DeepEqual(expectedTags, gotMeter.MeterId().tags) {
 		log.Errorf("Unexpected meter registered. Expecting %v. Got %v", expectedId, gotMeter.MeterId())

@@ -7,7 +7,7 @@ import (
 )
 
 func getGauge(name string) *Gauge {
-	return NewGauge(newId(name, nil))
+	return NewGauge(NewId(name, nil))
 }
 
 func TestGauge_Init(t *testing.T) {
@@ -31,7 +31,7 @@ func TestGauge_Measure(t *testing.T) {
 	g.Set(42.0)
 	ms := g.Measure()
 
-	expectedId := newId("g", map[string]string{"statistic": "gauge"})
+	expectedId := NewId("g", map[string]string{"statistic": "gauge"})
 	expected := []Measurement{{expectedId, 42.0}}
 	if !reflect.DeepEqual(expected, ms) {
 		t.Error("Unexpected measurements: ", ms)

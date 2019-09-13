@@ -6,7 +6,7 @@ import (
 )
 
 func getDistributionSummary(name string) *DistributionSummary {
-	id := newId(name, nil)
+	id := NewId(name, nil)
 	return NewDistributionSummary(id)
 }
 

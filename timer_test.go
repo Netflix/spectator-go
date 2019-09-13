@@ -6,7 +6,7 @@ import (
 )
 
 func getTimer(name string) *Timer {
-	id := newId(name, nil)
+	id := NewId(name, nil)
 	return NewTimer(id)
 }
 
