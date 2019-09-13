@@ -3,8 +3,7 @@ go:
   - "1.12"
 install:
   - go get -t ./...
-  - go get -u github.com/alecthomas/gometalinter
-  - gometalinter --install
+  - curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.18.0
 script:
   - go test -v
-  - gometalinter -D golint ./... 
+  - golangci-lint run
