@@ -1,6 +1,6 @@
 language: go
 go:
-  - "1.10"
+  - "1.12"
 install:
   - go get -t ./...
   - go get -u github.com/alecthomas/gometalinter
