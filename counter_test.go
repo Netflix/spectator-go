@@ -6,7 +6,7 @@ import (
 )
 
 func getCounter(name string) *Counter {
-	id := newId(name, nil)
+	id := NewId(name, nil)
 	return NewCounter(id)
 }
 

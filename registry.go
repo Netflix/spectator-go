@@ -260,9 +260,9 @@ func (r *Registry) measurementsToJson(measurements []Measurement) ([]byte, error
 	return json.Marshal(payload)
 }
 
-type meterFactoryFun func() Meter
+type MeterFactoryFun func() Meter
 
-func (r *Registry) newMeter(id *Id, meterFactory meterFactoryFun) Meter {
+func (r *Registry) NewMeter(id *Id, meterFactory MeterFactoryFun) Meter {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	meter, exists := r.meters[id.mapKey()]
@@ -274,11 +274,11 @@ func (r *Registry) newMeter(id *Id, meterFactory meterFactoryFun) Meter {
 }
 
 func (r *Registry) NewId(name string, tags map[string]string) *Id {
-	return newId(name, tags)
+	return NewId(name, tags)
 }
 
 func (r *Registry) CounterWithId(id *Id) *Counter {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewCounter(id)
 	})
 
@@ -294,11 +294,11 @@ func (r *Registry) CounterWithId(id *Id) *Counter {
 }
 
 func (r *Registry) Counter(name string, tags map[string]string) *Counter {
-	return r.CounterWithId(newId(name, tags))
+	return r.CounterWithId(NewId(name, tags))
 }
 
 func (r *Registry) TimerWithId(id *Id) *Timer {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewTimer(id)
 	})
 
@@ -314,11 +314,11 @@ func (r *Registry) TimerWithId(id *Id) *Timer {
 }
 
 func (r *Registry) Timer(name string, tags map[string]string) *Timer {
-	return r.TimerWithId(newId(name, tags))
+	return r.TimerWithId(NewId(name, tags))
 }
 
 func (r *Registry) GaugeWithId(id *Id) *Gauge {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewGauge(id)
 	})
 
@@ -334,11 +334,11 @@ func (r *Registry) GaugeWithId(id *Id) *Gauge {
 }
 
 func (r *Registry) Gauge(name string, tags map[string]string) *Gauge {
-	return r.GaugeWithId(newId(name, tags))
+	return r.GaugeWithId(NewId(name, tags))
 }
 
 func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
-	m := r.newMeter(id, func() Meter {
+	m := r.NewMeter(id, func() Meter {
 		return NewDistributionSummary(id)
 	})
 
@@ -354,5 +354,5 @@ func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
 }
 
 func (r *Registry) DistributionSummary(name string, tags map[string]string) *DistributionSummary {
-	return r.DistributionSummaryWithId(newId(name, tags))
+	return r.DistributionSummaryWithId(NewId(name, tags))
 }

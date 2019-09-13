@@ -8,7 +8,7 @@ import (
 )
 
 func TestId_mapKey(t *testing.T) {
-	id := newId("foo", nil)
+	id := NewId("foo", nil)
 	k := id.mapKey()
 	if k != "foo" {
 		t.Error("Expected foo, got", k)
@@ -28,7 +28,7 @@ func TestId_mapKeySortsTags(t *testing.T) {
 		k := fmt.Sprintf("%03d", i)
 		tags[k] = "v"
 	}
-	id := newId("foo", tags)
+	id := NewId("foo", tags)
 
 	var buf bytes.Buffer
 	buf.WriteString("foo")
@@ -45,7 +45,7 @@ func TestId_mapKeySortsTags(t *testing.T) {
 
 func TestId_copiesTags(t *testing.T) {
 	tags := map[string]string{"foo": "abc", "bar": "def"}
-	id := newId("foo", tags)
+	id := NewId("foo", tags)
 
 	tags["foo"] = "zzz"
 	if id.Tags()["foo"] != "abc" {
@@ -54,7 +54,7 @@ func TestId_copiesTags(t *testing.T) {
 }
 
 func TestId_Accessors(t *testing.T) {
-	id := newId("foo", map[string]string{"foo": "abc", "bar": "def"})
+	id := NewId("foo", map[string]string{"foo": "abc", "bar": "def"})
 	if id.Name() != "foo" {
 		t.Errorf("Expected name=foo, got name=%s", id.Name())
 	}
@@ -66,7 +66,7 @@ func TestId_Accessors(t *testing.T) {
 }
 
 func TestId_WithDefaultStat(t *testing.T) {
-	id1 := newId("c", map[string]string{"statistic": "baz"})
+	id1 := NewId("c", map[string]string{"statistic": "baz"})
 	id2 := id1.WithDefaultStat("counter")
 
 	if id2.Tags()["statistic"] != "baz" {
@@ -76,7 +76,7 @@ func TestId_WithDefaultStat(t *testing.T) {
 }
 
 func TestId_WithTags(t *testing.T) {
-	id1 := newId("c", map[string]string{"statistic": "baz", "a": "b"})
+	id1 := NewId("c", map[string]string{"statistic": "baz", "a": "b"})
 	id2 := id1.WithTags(map[string]string{"statistic": "foo", "k": "v"})
 	expected := map[string]string{"statistic": "foo", "k": "v", "a": "b"}
 	if id2.Name() != "c" {
@@ -89,7 +89,7 @@ func TestId_WithTags(t *testing.T) {
 }
 
 func TestId_WithStat(t *testing.T) {
-	id1 := newId("c", nil)
+	id1 := NewId("c", nil)
 	id2 := id1.WithStat("stuff")
 	if id2.String() != "Id{name=c,tags=map[statistic:stuff]}" {
 		t.Errorf("Got %s", id2.String())
