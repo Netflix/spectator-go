@@ -134,7 +134,7 @@ func shouldSendMeasurement(measurement Measurement) bool {
 		return false
 	}
 	isGauge := opFromTags(measurement.id.tags) == maxOp
-	return isGauge || v > 0
+	return isGauge || v >= 0
 }
 
 func (r *Registry) Measurements() []Measurement {
