@@ -17,13 +17,14 @@ type Meter interface {
 }
 
 type Config struct {
-	Frequency  time.Duration     `json:"frequency"`
-	Timeout    time.Duration     `json:"timeout"`
-	Uri        string            `json:"uri"`
-	BatchSize  int               `json:"batch_size"`
-	CommonTags map[string]string `json:"common_tags"`
-	Log        Logger
-	IsEnabled  func() bool
+	Frequency      time.Duration     `json:"frequency"`
+	Timeout        time.Duration     `json:"timeout"`
+	Uri            string            `json:"uri"`
+	BatchSize      int               `json:"batch_size"`
+	CommonTags     map[string]string `json:"common_tags"`
+	Log            Logger
+	IsEnabled      func() bool
+	IpcTimerRecord func(registry *Registry, id *Id, duration time.Duration)
 }
 
 type Registry struct {
@@ -56,6 +57,11 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 }
 
 func NewRegistry(config *Config) *Registry {
+	if config.IpcTimerRecord == nil {
+		config.IpcTimerRecord = func(registry *Registry, id *Id, duration time.Duration) {
+			registry.TimerWithId(id).Record(duration)
+		}
+	}
 	if config.IsEnabled == nil {
 		config.IsEnabled = func() bool { return true }
 	}
@@ -67,6 +73,17 @@ func NewRegistry(config *Config) *Registry {
 		&sync.Mutex{}, nil, make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	return r
+}
+
+// for testing
+func NewRegistryWithClock(config *Config, clock Clock) *Registry {
+	r := NewRegistry(config)
+	r.clock = clock
+	return r
+}
+
+func (r *Registry) GetLogger() Logger {
+	return r.config.Log
 }
 
 func (r *Registry) Meters() []Meter {
