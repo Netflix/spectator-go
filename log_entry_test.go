@@ -183,3 +183,10 @@ func TestPathFromUrl_QueryString(t *testing.T) {
 		t.Error("Url with query string - Got", p)
 	}
 }
+
+func TestPathFromUrl_MatrixFrag(t *testing.T) {
+	p := pathFromUrl("ftp://foo.example.com/api/v4/update;foo=bar#someAnchor")
+	if p != "/api/v4/update" {
+		t.Error("Url with query string - Got", p)
+	}
+}
