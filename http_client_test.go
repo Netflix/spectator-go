@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
@@ -15,7 +16,12 @@ var ok = map[string]string{
 	"status": "ok",
 }
 
+var errJson = map[string]string{
+	"status": "error",
+}
+
 var okMsg, _ = json.Marshal(ok)
+var errMsg, _ = json.Marshal(errJson)
 
 func TestHttpClient_PostJsonOk(t *testing.T) {
 	var log Logger
@@ -30,7 +36,7 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 		if bodyStr != "42" {
 			t.Error("Unexpected body in request:", bodyStr)
 		}
-		w.Write(okMsg)
+		_, _ = w.Write(okMsg)
 
 		contentType := r.Header.Get("Content-Type")
 		if contentType != "application/json" {
@@ -90,8 +96,8 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clock.SetFromDuration(StartTime + Timeout + 1)
 		time.Sleep(Timeout + time.Millisecond) // trigger timeout
-		r.Body.Close()
-		io.WriteString(w, "\"Should have timed out\"")
+		_ = r.Body.Close()
+		_, _ = io.WriteString(w, "\"Should have timed out\"")
 	})
 
 	server := httptest.NewServer(publishHandler)
@@ -134,4 +140,95 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	total := int64(Timeout + 1)
 	totalSq := float64(total) * float64(total)
 	assertTimer(t, gotMeter.(*Timer), 1, total, totalSq, total)
+}
+
+func TestHttpClient_PostJson503(t *testing.T) {
+	const StartTime = 1
+	clock := &ManualClock{StartTime}
+	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error("Unable to read body", err)
+		}
+		bodyStr := string(body)
+		if bodyStr != "42" {
+			t.Error("Unexpected body in request:", bodyStr)
+		}
+		w.WriteHeader(503)
+		_, _ = w.Write(errMsg)
+
+		contentType := r.Header.Get("Content-Type")
+		if contentType != "application/json" {
+			t.Errorf("Unexpected content-type: %s", contentType)
+		}
+		clock.SetNanos(StartTime + 1000)
+	})
+
+	server := httptest.NewServer(publishHandler)
+	defer server.Close()
+
+	serverUrl := server.URL
+
+	config := makeConfig(serverUrl)
+	registry := NewRegistryWithClock(config, clock)
+	client := NewHttpClient(registry, 100*time.Millisecond)
+
+	statusCode, err := client.PostJson(config.Uri, []byte("42"))
+	if err != nil {
+		t.Error("Unexpected error", err)
+	}
+
+	if statusCode != 503 {
+		t.Error("Expected 503 response. Got", statusCode)
+	}
+
+	meters := registry.Meters()
+	sort.Slice(meters, func(i, j int) bool {
+		return meters[i].MeterId().Tags()["ipc.attempt"] < meters[j].MeterId().Tags()["ipc.attempt"]
+	})
+	if len(meters) != 3 {
+		t.Fatal("Expected 1 meter, got", len(meters))
+	}
+
+	baseTags := map[string]string{
+		"owner":        "spectator-go",
+		"http.method":  "POST",
+		"http.status":  "503",
+		"ipc.endpoint": "/",
+		"ipc.result":   "failure",
+		"ipc.status":   "http-error",
+	}
+	initial := map[string]string{
+		"ipc.attempt":       "initial",
+		"ipc.attempt.final": "false",
+	}
+	second := map[string]string{
+		"ipc.attempt":       "second",
+		"ipc.attempt.final": "false",
+	}
+	final := map[string]string{
+		"ipc.attempt":       "third_up",
+		"ipc.attempt.final": "true",
+	}
+	extra := []map[string]string{initial, second, final}
+
+	for i, m := range meters {
+		if m.MeterId().Name() != "ipc.client.call" {
+			t.Errorf("Expected ipc.client.call got %s (%v)", m.MeterId().Name(), m.MeterId())
+		}
+		assertTags(t, m.MeterId().Tags(), baseTags, extra[i])
+	}
+}
+
+func assertTags(t *testing.T, actual, base, extra map[string]string) {
+	expected := make(map[string]string)
+	for k, v := range base {
+		expected[k] = v
+	}
+	for k, v := range extra {
+		expected[k] = v
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Expected %v, got %v", expected, actual)
+	}
 }

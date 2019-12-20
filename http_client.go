@@ -60,7 +60,10 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 	return req, nil
 }
 
-func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err error) {
+const maxAttempts = 3
+
+func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int) (statusCode int, err error) {
+	var willRetry bool
 	statusCode = 400
 	log := h.registry.GetLogger()
 	var req *http.Request
@@ -75,18 +78,19 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 	resp, err := client.Do(req)
 	if err != nil {
 		var status string
-		if urlerr, ok := err.(*url.Error); ok {
-			if urlerr.Timeout() {
+		if urlErr, ok := err.(*url.Error); ok {
+			if urlErr.Timeout() {
 				status = "timeout"
-			} else if urlerr.Temporary() {
+			} else if urlErr.Temporary() {
 				status = "temporary"
 			} else {
-				status = userFriendlyErr(urlerr.Err.Error())
+				status = userFriendlyErr(urlErr.Err.Error())
 			}
 		} else {
 			status = err.Error()
 		}
 		entry.SetError(status)
+		willRetry = false
 		log.Errorf("Unable to POST to %s: %v", uri, err)
 	} else {
 		defer func() {
@@ -103,13 +107,30 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 			return
 		}
 		log.Debugf("response HTTP %d: %s", resp.StatusCode, body)
-		if resp.StatusCode == 200 {
+		if statusCode == 200 {
 			entry.SetSuccess()
 		} else {
 			entry.SetError("http-error")
 		}
+		// only retry 503s for now
+		willRetry = statusCode == 503
 	}
-	entry.SetAttempt(0, true)
+
+	final := !(willRetry && (attemptNumber+1) < maxAttempts)
+	entry.SetAttempt(attemptNumber, final)
 	entry.Log()
+	return
+}
+
+func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err error) {
+	for attemptNumber := 0; attemptNumber < maxAttempts; attemptNumber += 1 {
+		statusCode, err = h.doHttpPost(uri, jsonBytes, attemptNumber)
+		willRetry := statusCode == 503 && err == nil
+		if !willRetry {
+			break
+		}
+		toSleep := 100 * time.Millisecond
+		time.Sleep(time.Duration(attemptNumber+1) * toSleep)
+	}
 	return
 }

@@ -80,14 +80,16 @@ func pathFromUrl(url string) string {
 	}
 	pathBegin += protoEnd + 3
 
-	queryBegin := strings.IndexByte(url[pathBegin+1:], '?')
-	if queryBegin < 0 {
+	// find the first character that ends the path, could be beginning of query params, matrix params, or
+	// url fragment
+	pathEnd := strings.IndexAny(url[pathBegin+1:], "?#;")
+	if pathEnd < 0 {
 		// no query component
 		return url[pathBegin:]
 	}
-	queryBegin += pathBegin + 1
+	pathEnd += pathBegin + 1
 
-	return url[pathBegin:queryBegin]
+	return url[pathBegin:pathEnd]
 }
 
 func NewLogEntry(registry *Registry, method string, url string) *LogEntry {
