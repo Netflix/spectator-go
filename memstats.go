@@ -73,7 +73,7 @@ func CollectMemStats(registry *Registry) {
 
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
-		log := registry.config.Log
+		log := registry.GetLogger()
 		for range ticker.C {
 			log.Debugf("Collecting memory stats")
 			memStats(&mem)

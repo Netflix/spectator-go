@@ -3,11 +3,9 @@ package spectator
 import (
 	"bytes"
 	"compress/gzip"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -64,7 +62,7 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 
 func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err error) {
 	statusCode = 400
-	log := h.registry.config.Log
+	log := h.registry.GetLogger()
 	var req *http.Request
 	req, err = h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {
@@ -72,30 +70,23 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 	}
 	client := http.Client{}
 	client.Timeout = h.timeout
-
-	tags := map[string]string{
-		"client": "spectator-go",
-		"method": "POST",
-		"mode":   "http-client",
-	}
-
-	clock := h.registry.clock
-	start := clock.Now()
+	entry := NewLogEntry(h.registry, "POST", uri)
 	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
 	resp, err := client.Do(req)
 	if err != nil {
+		var status string
 		if urlerr, ok := err.(*url.Error); ok {
 			if urlerr.Timeout() {
-				tags["status"] = "timeout"
+				status = "timeout"
 			} else if urlerr.Temporary() {
-				tags["status"] = "temporary"
+				status = "temporary"
 			} else {
-				tags["status"] = userFriendlyErr(urlerr.Err.Error())
+				status = userFriendlyErr(urlerr.Err.Error())
 			}
 		} else {
-			tags["status"] = err.Error()
+			status = err.Error()
 		}
-		tags["statusCode"] = tags["status"]
+		entry.SetError(status)
 		log.Errorf("Unable to POST to %s: %v", uri, err)
 	} else {
 		defer func() {
@@ -104,8 +95,7 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 			}
 		}()
 		statusCode = resp.StatusCode
-		tags["statusCode"] = strconv.Itoa(resp.StatusCode)
-		tags["status"] = fmt.Sprintf("%dxx", resp.StatusCode/100)
+		entry.SetStatusCode(resp.StatusCode)
 		var body []byte
 		body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
@@ -113,8 +103,13 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err
 			return
 		}
 		log.Debugf("response HTTP %d: %s", resp.StatusCode, body)
+		if resp.StatusCode == 200 {
+			entry.SetSuccess()
+		} else {
+			entry.SetError("http-error")
+		}
 	}
-	elapsed := clock.Now().Sub(start)
-	h.registry.Timer("http.req.complete", tags).Record(elapsed)
+	entry.SetAttempt(0, true)
+	entry.Log()
 	return
 }

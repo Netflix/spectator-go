@@ -7,9 +7,8 @@ import (
 )
 
 func TestUpdateMemStats(t *testing.T) {
-	registry := NewRegistry(makeConfig(""))
 	var clock ManualClock
-	registry.clock = &clock
+	registry := NewRegistryWithClock(makeConfig(""), &clock)
 	var mem memStatsCollector
 
 	initializeMemStatsCollector(registry, &mem)

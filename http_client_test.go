@@ -45,9 +45,8 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 	serverUrl := server.URL
 
 	config := makeConfig(serverUrl)
-	registry := NewRegistry(config)
-	registry.clock = clock
-	log = registry.config.Log
+	registry := NewRegistryWithClock(config, clock)
+	log = registry.GetLogger()
 	client := NewHttpClient(registry, 100*time.Millisecond)
 
 	statusCode, err := client.PostJson(config.Uri, []byte("42"))
@@ -65,13 +64,16 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 	}
 
 	expectedTags := map[string]string{
-		"status":     "2xx",
-		"statusCode": "200",
-		"client":     "spectator-go",
-		"method":     "POST",
-		"mode":       "http-client",
+		"owner":             "spectator-go",
+		"http.method":       "POST",
+		"http.status":       "200",
+		"ipc.attempt":       "initial",
+		"ipc.attempt.final": "true",
+		"ipc.endpoint":      "/",
+		"ipc.result":        "success",
+		"ipc.status":        "success",
 	}
-	expectedId := NewId("http.req.complete", expectedTags)
+	expectedId := newId("ipc.client.call", expectedTags)
 	gotMeter := meters[0]
 	if expectedId.name != gotMeter.MeterId().name || !reflect.DeepEqual(expectedTags, gotMeter.MeterId().tags) {
 		log.Errorf("Unexpected meter registered. Expecting %v. Got %v", expectedId, gotMeter.MeterId())
@@ -98,9 +100,8 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	serverUrl := server.URL
 
 	config := makeConfig(serverUrl)
-	registry := NewRegistry(config)
-	registry.clock = clock
-	log = registry.config.Log
+	registry := NewRegistryWithClock(config, clock)
+	log = registry.GetLogger()
 	client := NewHttpClient(registry, Timeout)
 
 	statusCode, err := client.PostJson(config.Uri, []byte("42"))
@@ -115,13 +116,16 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	}
 
 	expectedTags := map[string]string{
-		"status":     "timeout",
-		"statusCode": "timeout",
-		"client":     "spectator-go",
-		"method":     "POST",
-		"mode":       "http-client",
+		"owner":             "spectator-go",
+		"http.method":       "POST",
+		"http.status":       "-1",
+		"ipc.attempt":       "initial",
+		"ipc.attempt.final": "true",
+		"ipc.endpoint":      "/",
+		"ipc.result":        "failure",
+		"ipc.status":        "timeout",
 	}
-	expectedId := NewId("http.req.complete", expectedTags)
+	expectedId := newId("ipc.client.call", expectedTags)
 	gotMeter := meters[0]
 	if expectedId.name != gotMeter.MeterId().name || !reflect.DeepEqual(expectedTags, gotMeter.MeterId().tags) {
 		log.Errorf("Unexpected meter registered. Expecting %v. Got %v", expectedId, gotMeter.MeterId())

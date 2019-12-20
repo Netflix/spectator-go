@@ -21,6 +21,7 @@ func makeConfig(uri string) *Config {
 		},
 		nil,
 		nil,
+		nil,
 	}
 }
 
@@ -40,9 +41,11 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 		map[string]string{"nf.app": "app", "nf.account": "1234"},
 		defaultLogger(),
 		nil,
+		nil,
 	}
 	cfg := r.config
 	cfg.IsEnabled = nil
+	cfg.IpcTimerRecord = nil
 	if !reflect.DeepEqual(&expectedConfig, cfg) {
 		t.Errorf("Expected config %v, got %v", expectedConfig, cfg)
 	}
@@ -87,9 +90,8 @@ func TestRegistry_Timer(t *testing.T) {
 }
 
 func TestRegistry_Start(t *testing.T) {
-	r := NewRegistry(config)
 	clock := &ManualClock{1}
-	r.clock = clock
+	r := NewRegistryWithClock(config, clock)
 	r.Counter("foo", nil).Increment()
 	r.Start()
 	time.Sleep(30 * time.Millisecond)
