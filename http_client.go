@@ -17,12 +17,11 @@ import (
 
 type HttpClient struct {
 	registry *Registry
-	timeout  time.Duration
 	client   *http.Client
 }
 
 func NewHttpClient(registry *Registry, timeout time.Duration) *HttpClient {
-	return &HttpClient{registry, timeout, newSingleHostClient()}
+	return &HttpClient{registry, newSingleHostClient(timeout)}
 }
 
 func userFriendlyErr(errStr string) string {
@@ -146,23 +145,24 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (response HttpRespon
 	}
 	return
 }
-func newSingleHostClient() *http.Client {
+func newSingleHostClient(timeout time.Duration) *http.Client {
 	return &http.Client{
+		Timeout: timeout,
 		Transport: &keepAliveTransport{wrapped: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 90 * time.Second,
+				Timeout:   5 * time.Second,
+				KeepAlive: 30 * time.Second,
 				DualStack: true,
 			}).DialContext,
 			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          10,
-			MaxIdleConnsPerHost:   10,
-			MaxConnsPerHost:       30,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
+			MaxIdleConns:          50,
+			MaxIdleConnsPerHost:   50,
+			MaxConnsPerHost:       100,
+			IdleConnTimeout:       30 * time.Second,
+			TLSHandshakeTimeout:   2 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
-			DisableKeepAlives:     true,
+			// DisableKeepAlives:     true,
 		}},
 	}
 }
