@@ -13,7 +13,7 @@ type Id struct {
 }
 
 // computes and saves a key to be used to address Ids in maps
-func (id *Id) mapKey() string {
+func (id *Id) MapKey() string {
 	if len(id.key) > 0 {
 		return id.key
 	}

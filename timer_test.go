@@ -53,14 +53,14 @@ func assertTimer(t *testing.T, timer *Timer, count int64, total int64, totalSq f
 	}
 
 	expected := make(map[string]float64)
-	expected[timer.id.WithStat("count").mapKey()] = float64(count)
-	expected[timer.id.WithStat("totalTime").mapKey()] = float64(total) / 1e9
-	expected[timer.id.WithStat("totalOfSquares").mapKey()] = totalSq / 1e18
-	expected[timer.id.WithStat("max").mapKey()] = float64(max) / 1e9
+	expected[timer.id.WithStat("count").MapKey()] = float64(count)
+	expected[timer.id.WithStat("totalTime").MapKey()] = float64(total) / 1e9
+	expected[timer.id.WithStat("totalOfSquares").MapKey()] = totalSq / 1e18
+	expected[timer.id.WithStat("max").MapKey()] = float64(max) / 1e9
 
 	got := make(map[string]float64)
 	for _, v := range ms {
-		got[v.id.mapKey()] = v.value
+		got[v.id.MapKey()] = v.value
 	}
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("Expected measurements (count=%d, total=%d, totalSq=%.0f, max=%d)", count, total, totalSq, max)
