@@ -28,7 +28,7 @@ func TestUpdateMemStats(t *testing.T) {
 	updateMemStats(&mem, &memStats)
 
 	ms := registry.Meters()
-	if len(ms) != 6 {
+	if len(ms) != 11 {
 		t.Error("Expected 6 meters registered, got", len(ms))
 	}
 
