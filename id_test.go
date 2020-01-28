@@ -9,15 +9,15 @@ import (
 
 func TestId_mapKey(t *testing.T) {
 	id := NewId("foo", nil)
-	k := id.mapKey()
+	k := id.MapKey()
 	if k != "foo" {
 		t.Error("Expected foo, got", k)
 	}
 
 	reusesKey := Id{"foo", nil, "bar"}
-	k2 := reusesKey.mapKey()
+	k2 := reusesKey.MapKey()
 	if k2 != "bar" {
-		t.Error("Expected mapKey to be reused: bar !=", k2)
+		t.Error("Expected MapKey to be reused: bar !=", k2)
 	}
 }
 
@@ -37,7 +37,7 @@ func TestId_mapKeySortsTags(t *testing.T) {
 		buf.WriteString(k)
 	}
 
-	k := id.mapKey()
+	k := id.MapKey()
 	if k != buf.String() {
 		t.Errorf("Expected %s, got %s", buf.String(), k)
 	}

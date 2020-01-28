@@ -282,10 +282,10 @@ type MeterFactoryFun func() Meter
 func (r *Registry) NewMeter(id *Id, meterFactory MeterFactoryFun) Meter {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	meter, exists := r.meters[id.mapKey()]
+	meter, exists := r.meters[id.MapKey()]
 	if !exists {
 		meter = meterFactory()
-		r.meters[id.mapKey()] = meter
+		r.meters[id.MapKey()] = meter
 	}
 	return meter
 }
