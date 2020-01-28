@@ -18,11 +18,10 @@ func NewMonotonicCounterWithId(registry *Registry, id *Id) *MonotonicCounter {
 }
 
 func (c *MonotonicCounter) Set(amount int64) {
-	prev := atomic.LoadInt64(&c.value)
-	if prev > 0 {
-		if c.counter == nil {
-			c.counter = c.registry.CounterWithId(c.id)
-		}
+	if c.counter == nil {
+		c.counter = c.registry.CounterWithId(c.id)
+	} else {
+		prev := atomic.LoadInt64(&c.value)
 		delta := amount - prev
 		if delta >= 0 {
 			c.counter.Add(delta)
