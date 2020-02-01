@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -22,6 +23,16 @@ var errJson = map[string]string{
 
 var okMsg, _ = json.Marshal(ok)
 var errMsg, _ = json.Marshal(errJson)
+
+func myMeters(registry *Registry) []Meter {
+	var myMeters []Meter
+	for _, meter := range registry.Meters() {
+		if !strings.HasPrefix(meter.MeterId().name, "spectator.") {
+			myMeters = append(myMeters, meter)
+		}
+	}
+	return myMeters
+}
 
 func TestHttpClient_PostJsonOk(t *testing.T) {
 	var log Logger
@@ -55,16 +66,16 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 	log = registry.GetLogger()
 	client := NewHttpClient(registry, 100*time.Millisecond)
 
-	statusCode, err := client.PostJson(config.Uri, []byte("42"))
+	resp, err := client.postJson(config.Uri, []byte("42"))
 	if err != nil {
 		t.Error("Unexpected error", err)
 	}
 
-	if statusCode != 200 {
-		t.Error("Expected 200 response. Got", statusCode)
+	if resp.status != 200 {
+		t.Error("Expected 200 response. Got", resp.status)
 	}
 
-	meters := registry.Meters()
+	meters := myMeters(registry)
 	if len(meters) != 1 {
 		t.Fatal("Expected 1 meter, got", len(meters))
 	}
@@ -110,13 +121,13 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	log = registry.GetLogger()
 	client := NewHttpClient(registry, Timeout)
 
-	statusCode, err := client.PostJson(config.Uri, []byte("42"))
+	resp, err := client.postJson(config.Uri, []byte("42"))
 	// 400 is our catch all for errors that are results of exceptions
-	if statusCode != 400 || err == nil {
-		t.Error("Expected 400 response due to timeout, with error set. Got", statusCode)
+	if err != nil && (&resp != nil && resp.status != -1) {
+		t.Error("Expected -1 response due to timeout, with error set. Got", resp)
 	}
 
-	meters := registry.Meters()
+	meters := myMeters(registry)
 	if len(meters) != 1 {
 		t.Fatal("Expected 1 meter, got", len(meters))
 	}
@@ -173,16 +184,16 @@ func TestHttpClient_PostJson503(t *testing.T) {
 	registry := NewRegistryWithClock(config, clock)
 	client := NewHttpClient(registry, 100*time.Millisecond)
 
-	statusCode, err := client.PostJson(config.Uri, []byte("42"))
+	resp, err := client.postJson(config.Uri, []byte("42"))
 	if err != nil {
-		t.Error("Unexpected error", err)
+		t.Fatal("Unexpected error", err)
 	}
 
-	if statusCode != 503 {
-		t.Error("Expected 503 response. Got", statusCode)
+	if resp.status != 503 {
+		t.Error("Expected 503 response. Got", resp.status)
 	}
 
-	meters := registry.Meters()
+	meters := myMeters(registry)
 	sort.Slice(meters, func(i, j int) bool {
 		return meters[i].MeterId().Tags()["ipc.attempt"] < meters[j].MeterId().Tags()["ipc.attempt"]
 	})
