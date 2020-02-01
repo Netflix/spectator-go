@@ -27,7 +27,7 @@ func TestUpdateMemStats(t *testing.T) {
 	memStats.PauseTotalNs = uint64(5 * time.Millisecond)
 	updateMemStats(&mem, &memStats)
 
-	ms := registry.Meters()
+	ms := myMeters(registry)
 	if len(ms) != 11 {
 		t.Error("Expected 11 meters registered, got", len(ms))
 	}
@@ -46,11 +46,17 @@ func TestUpdateMemStats(t *testing.T) {
 		} else {
 			expected := expectedValues[name]
 			measures := m.Measure()
-			if len(measures) != 1 {
-				t.Errorf("Expected one value from %v: got %d", m.MeterId(), len(measures))
-			}
-			if v := measures[0].value; v != expected {
-				t.Errorf("%v: expected %f. got %f", m.MeterId(), expected, v)
+			if expected > 0 {
+				if len(measures) != 1 {
+					t.Fatalf("Expected one value from %v: got %d", m.MeterId(), len(measures))
+				}
+				if v := measures[0].value; v != expected {
+					t.Errorf("%v: expected %f. got %f", m.MeterId(), expected, v)
+				}
+			} else {
+				if len(measures) != 0 {
+					t.Errorf("Unexpected measurements from %v: got %d measurements", m.MeterId(), len(measures))
+				}
 			}
 		}
 	}
@@ -89,11 +95,15 @@ func TestUpdateMemStats(t *testing.T) {
 		} else {
 			expected := expectedValues[name]
 			measures := m.Measure()
-			if len(measures) != 1 {
-				t.Errorf("Expected one value from %v: got %d", m.MeterId(), len(measures))
-			}
-			if v := measures[0].value; v != expected {
-				t.Errorf("%v: expected %f. got %f", m.MeterId(), expected, v)
+			if expected > 0 {
+				if len(measures) != 1 {
+					t.Errorf("Expected one value from %v: got %d", m.MeterId(), len(measures))
+				}
+				if v := measures[0].value; v != expected {
+					t.Errorf("%v: expected %f. got %f", m.MeterId(), expected, v)
+				}
+			} else if len(measures) != 0 {
+				t.Errorf("Unexpected measurements from %v: got %d measurements", m.MeterId(), len(measures))
 			}
 		}
 	}

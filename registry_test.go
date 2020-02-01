@@ -176,7 +176,7 @@ func TestRegistry_publish(t *testing.T) {
 			t.Errorf("Expected payload:\n %v\ngot:\n %v", expectedEntries, payloadEntries)
 		}
 
-		w.Write(okMsg)
+		_, _ = w.Write(okMsg)
 
 		clock.SetNanos(StartTime + 1000)
 	})
@@ -192,8 +192,66 @@ func TestRegistry_publish(t *testing.T) {
 
 	r.Counter("foo", nil).Add(10)
 	r.publish()
+
+	ms := measurementsToMap(r.Measurements())
+	if ms["spectator.measurements|count|sent"] != 1 {
+		t.Errorf("Expecting one measurement sent, got %f", ms["spectator.measurements|count|sent"])
+	}
 }
 
+func TestRegistry_publish_errors(t *testing.T) {
+	partial := map[string]interface{}{
+		"type":       "partial",
+		"errorCount": 1,
+		"message":    []string{"key too short: [o] (1 < 2)"},
+	}
+	partialMsg, _ := json.Marshal(partial)
+
+	const StartTime = 1
+	clock := &ManualClock{StartTime}
+	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write(partialMsg)
+		clock.SetNanos(StartTime + 1000)
+	})
+
+	server := httptest.NewServer(publishHandler)
+	defer server.Close()
+
+	serverUrl := server.URL
+
+	cfg := makeConfig(serverUrl)
+	r := NewRegistry(cfg)
+	r.clock = clock
+
+	// send 3 measurements
+	r.Counter("foo1", nil).Add(10)
+	r.Counter("foo2", nil).Add(10)
+	r.Counter("foo3", nil).Add(10)
+	r.publish()
+	// our hardcoded payload says 1 of the measurements failed validation checks
+	ms := r.Measurements()
+	validationErrors := 0.0
+	sent := 0.0
+	for _, m := range ms {
+		if m.id.name == "spectator.measurements" {
+			id := m.id.tags["id"]
+			if id == "dropped" && m.id.tags["error"] == "validation" {
+				validationErrors += m.value
+			} else if id == "sent" {
+				sent += m.value
+			} else {
+				t.Errorf("Unexpected spectator.measurements found: %v", m)
+			}
+		}
+	}
+	if sent != 2 {
+		t.Errorf("Expecting 2 measurements sent, got %f", sent)
+	}
+	if validationErrors != 1 {
+		t.Errorf("Expecting 1 invalid measurement, got %f", validationErrors)
+	}
+}
 func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
 	if a != b {
 		msg := fmt.Sprintf("%v != %v", a, b)

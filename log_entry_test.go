@@ -15,6 +15,10 @@ func measurementsToMap(ms []Measurement) map[string]float64 {
 		if p != "" {
 			idStr += "|" + p
 		}
+		id := m.id.tags["id"]
+		if id != "" {
+			idStr += "|" + id
+		}
 		result[idStr] = m.Value()
 	}
 	return result
