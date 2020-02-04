@@ -121,10 +121,9 @@ func TestHttpClient_PostJsonTimeout(t *testing.T) {
 	log = registry.GetLogger()
 	client := NewHttpClient(registry, Timeout)
 
-	resp, err := client.PostJson(config.Uri, []byte("42"))
-	// 400 is our catch all for errors that are results of exceptions
-	if err != nil && (&resp != nil && resp.status != -1) {
-		t.Error("Expected -1 response due to timeout, with error set. Got", resp)
+	_, err := client.PostJson(config.Uri, []byte("42"))
+	if err == nil {
+		t.Fatal("Expected an error due to timeout")
 	}
 
 	meters := myMeters(registry)
