@@ -7,6 +7,7 @@ import (
 	"math"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,13 +29,17 @@ type Config struct {
 }
 
 type Registry struct {
-	clock   Clock
-	config  *Config
-	meters  map[string]Meter
-	started bool
-	mutex   *sync.Mutex
-	http    *HttpClient
-	quit    chan struct{}
+	clock          Clock
+	config         *Config
+	meters         map[string]Meter
+	started        bool
+	mutex          *sync.Mutex
+	http           *HttpClient
+	sentMetrics    *Counter
+	invalidMetrics *Counter
+	droppedHttp    *Counter
+	droppedOther   *Counter
+	quit           chan struct{}
 }
 
 func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
@@ -70,8 +75,18 @@ func NewRegistry(config *Config) *Registry {
 	}
 
 	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
-		&sync.Mutex{}, nil, make(chan struct{})}
+		&sync.Mutex{}, nil, nil, nil, nil, nil,
+		make(chan struct{})}
 	r.http = NewHttpClient(r, r.config.Timeout)
+	r.sentMetrics = r.Counter("spectator.measurements",
+		map[string]string{"id": "sent"})
+	r.invalidMetrics = r.Counter("spectator.measurements",
+		map[string]string{"id": "dropped", "error": "validation"})
+	r.droppedHttp = r.Counter("spectator.measurements",
+		map[string]string{"id": "dropped", "error": "http-error"})
+	r.droppedOther = r.Counter("spectator.measurements",
+		map[string]string{"id": "dropped", "error": "other"})
+
 	return r
 }
 
@@ -168,16 +183,66 @@ func (r *Registry) Measurements() []Measurement {
 	return measurements
 }
 
+type atlasMessage struct {
+	Type       string   `json:"type"`
+	ErrorCount int      `json:"errorCount"`
+	Message    []string `json:"message"`
+}
+
+func getUnique(messages []string) string {
+	uniq := map[string]struct{}{}
+	for _, msg := range messages {
+		uniq[msg] = struct{}{}
+	}
+	keys := make([]string, 0, len(uniq))
+	for key := range uniq {
+		keys = append(keys, key)
+	}
+	return strings.Join(keys, "; ")
+}
+
 func (r *Registry) sendBatch(measurements []Measurement) {
+	numMeasurements := int64(len(measurements))
 	r.config.Log.Debugf("Sending %d measurements to %s", len(measurements), r.config.Uri)
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
+		r.droppedOther.Add(numMeasurements)
 		r.config.Log.Errorf("Unable to convert measurements to json: %v", err)
 	} else {
-		var status int
-		status, err = r.http.PostJson(r.config.Uri, jsonBytes)
-		if status != 200 || err != nil {
-			r.config.Log.Errorf("Could not POST measurements: HTTP %d %v", status, err)
+		var resp HttpResponse
+		resp, err = r.http.PostJson(r.config.Uri, jsonBytes)
+		if err != nil {
+			r.droppedHttp.Add(numMeasurements)
+		} else {
+			sent := int64(0)
+			dropped := int64(0)
+			if resp.status == 200 {
+				sent = numMeasurements
+			} else if resp.status < 500 {
+				var atlasResponse atlasMessage
+				err = json.Unmarshal(resp.body, &atlasResponse)
+				if err != nil {
+					r.config.Log.Errorf("%d measurement(s) dropped. Http status: %d", numMeasurements, resp.status)
+					r.droppedOther.Add(numMeasurements)
+				} else {
+					dropped = int64(atlasResponse.ErrorCount)
+					sent = numMeasurements - dropped
+					// get the unique error messages
+					var errorMsg string
+					if len(atlasResponse.Message) > 0 {
+						errorMsg = getUnique(atlasResponse.Message)
+					} else {
+						errorMsg = "unknown cause"
+					}
+					r.config.Log.Infof("%d measurement(s) dropped due to validation errors: %s",
+						dropped, errorMsg)
+				}
+			} else {
+				// 5xx error from server, note that sent and dropped are 0
+				r.droppedHttp.Add(numMeasurements)
+			}
+			r.invalidMetrics.Add(dropped)
+			r.sentMetrics.Add(sent)
 		}
 	}
 }
@@ -203,36 +268,36 @@ func (r *Registry) publish() {
 }
 
 func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measurement) map[string]int {
-	var strings = make(map[string]int)
+	var strTable = make(map[string]int)
 	commonTags := r.config.CommonTags
 	for k, v := range commonTags {
-		strings[k] = 0
-		strings[v] = 0
+		strTable[k] = 0
+		strTable[v] = 0
 	}
 
-	strings["name"] = 0
+	strTable["name"] = 0
 	for _, measure := range measurements {
-		strings[measure.id.name] = 0
+		strTable[measure.id.name] = 0
 		for k, v := range measure.id.tags {
-			strings[k] = 0
-			strings[v] = 0
+			strTable[k] = 0
+			strTable[v] = 0
 		}
 	}
-	sortedStrings := make([]string, 0, len(strings))
-	for s := range strings {
+	sortedStrings := make([]string, 0, len(strTable))
+	for s := range strTable {
 		sortedStrings = append(sortedStrings, s)
 	}
 	sort.Strings(sortedStrings)
 	for i, s := range sortedStrings {
-		strings[s] = i
+		strTable[s] = i
 	}
-	*payload = append(*payload, len(strings))
+	*payload = append(*payload, len(strTable))
 	// can't append the strings in one call since we can't convert []string to []interface{}
 	for _, s := range sortedStrings {
 		*payload = append(*payload, s)
 	}
 
-	return strings
+	return strTable
 }
 
 const (
@@ -269,9 +334,9 @@ func (r *Registry) appendMeasurement(payload *[]interface{}, strings map[string]
 
 func (r *Registry) measurementsToJson(measurements []Measurement) ([]byte, error) {
 	var payload []interface{}
-	strings := r.buildStringTable(&payload, measurements)
+	stringTable := r.buildStringTable(&payload, measurements)
 	for _, m := range measurements {
-		r.appendMeasurement(&payload, strings, m)
+		r.appendMeasurement(&payload, stringTable, m)
 	}
 
 	return json.Marshal(payload)

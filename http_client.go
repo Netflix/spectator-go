@@ -62,9 +62,14 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 
 const maxAttempts = 3
 
-func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int) (statusCode int, err error) {
+type HttpResponse struct {
+	status int
+	body   []byte
+}
+
+func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int) (response HttpResponse, err error) {
 	var willRetry bool
-	statusCode = 400
+	response.status = -1
 	log := h.registry.GetLogger()
 	var req *http.Request
 	req, err = h.createPayloadRequest(uri, jsonBytes)
@@ -91,29 +96,33 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 		}
 		entry.SetError(status)
 		willRetry = false
-		log.Errorf("Unable to POST to %s: %v", uri, err)
+		if timeout, ok := err.(*url.Error); ok && timeout.Timeout() {
+			log.Infof("Timed out attempting to POST to %s", uri)
+		} else {
+			log.Infof("Unable to POST to %s: %v", uri, err)
+		}
 	} else {
 		defer func() {
 			if err = resp.Body.Close(); err != nil {
 				log.Errorf("Unable to close body: %v", err)
 			}
 		}()
-		statusCode = resp.StatusCode
+		response.status = resp.StatusCode
 		entry.SetStatusCode(resp.StatusCode)
 		var body []byte
-		body, err = ioutil.ReadAll(resp.Body)
+		response.body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Errorf("Unable to read response body: %v", err)
 			return
 		}
 		log.Debugf("response HTTP %d: %s", resp.StatusCode, body)
-		if statusCode == 200 {
+		if response.status >= 200 && response.status < 300 {
 			entry.SetSuccess()
 		} else {
 			entry.SetError("http-error")
 		}
 		// only retry 503s for now
-		willRetry = statusCode == 503
+		willRetry = response.status == 503
 	}
 
 	final := !(willRetry && (attemptNumber+1) < maxAttempts)
@@ -122,10 +131,10 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	return
 }
 
-func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (statusCode int, err error) {
+func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (response HttpResponse, err error) {
 	for attemptNumber := 0; attemptNumber < maxAttempts; attemptNumber += 1 {
-		statusCode, err = h.doHttpPost(uri, jsonBytes, attemptNumber)
-		willRetry := statusCode == 503 && err == nil
+		response, err = h.doHttpPost(uri, jsonBytes, attemptNumber)
+		willRetry := err == nil && response.status == 503
 		if !willRetry {
 			break
 		}
