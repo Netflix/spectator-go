@@ -3,10 +3,13 @@ package spectator
 import (
 	"bytes"
 	"compress/gzip"
+	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -14,11 +17,11 @@ import (
 
 type HttpClient struct {
 	registry *Registry
-	timeout  time.Duration
+	client   *http.Client
 }
 
 func NewHttpClient(registry *Registry, timeout time.Duration) *HttpClient {
-	return &HttpClient{registry, timeout}
+	return &HttpClient{registry, newSingleHostClient(timeout)}
 }
 
 func userFriendlyErr(errStr string) string {
@@ -76,11 +79,10 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	if err != nil {
 		panic(err)
 	}
-	client := http.Client{}
-	client.Timeout = h.timeout
 	entry := NewLogEntry(h.registry, "POST", uri)
 	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
-	resp, err := client.Do(req)
+	defer h.client.CloseIdleConnections()
+	resp, err := h.client.Do(req)
 	if err != nil {
 		var status string
 		if urlErr, ok := err.(*url.Error); ok {
@@ -142,4 +144,60 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (response HttpRespon
 		time.Sleep(time.Duration(attemptNumber+1) * toSleep)
 	}
 	return
+}
+func newSingleHostClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &keepAliveTransport{wrapped: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          50,
+			MaxIdleConnsPerHost:   50,
+			MaxConnsPerHost:       100,
+			IdleConnTimeout:       30 * time.Second,
+			TLSHandshakeTimeout:   2 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			// DisableKeepAlives:     true,
+		}},
+	}
+}
+
+type keepAliveTransport struct {
+	wrapped http.RoundTripper
+}
+
+func (k *keepAliveTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := k.wrapped.RoundTrip(r)
+	if err != nil {
+		return resp, err
+	}
+	resp.Body = &drainingReadCloser{rdr: resp.Body}
+	return resp, nil
+}
+
+type drainingReadCloser struct {
+	rdr     io.ReadCloser
+	seenEOF uint32
+}
+
+func (d *drainingReadCloser) Read(p []byte) (n int, err error) {
+	n, err = d.rdr.Read(p)
+	if err == io.EOF || n == 0 {
+		atomic.StoreUint32(&d.seenEOF, 1)
+	}
+	return
+}
+
+func (d *drainingReadCloser) Close() error {
+	// drain buffer
+	if atomic.LoadUint32(&d.seenEOF) != 1 {
+		//#nosec
+		_, _ = io.Copy(ioutil.Discard, d.rdr)
+	}
+	return d.rdr.Close()
 }
