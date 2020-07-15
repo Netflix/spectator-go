@@ -16,7 +16,8 @@ func goRuntimeStats(s *sysStatsCollector) {
 	s.numGoroutines.Set(float64(runtime.NumGoroutine()))
 }
 
-// Collects system stats: current/max file handles, number of goroutines
+// CollectSysStats collects system stats: current/max file handles, number of
+// goroutines
 func CollectSysStats(registry *Registry) {
 	var s sysStatsCollector
 	s.registry = registry
@@ -35,7 +36,7 @@ func CollectSysStats(registry *Registry) {
 	}()
 }
 
-// Starts the collection of memory and file handle metrics
+// CollectRuntimeMetrics starts the collection of memory and file handle metrics
 func CollectRuntimeMetrics(registry *Registry) {
 	CollectMemStats(registry)
 	CollectSysStats(registry)

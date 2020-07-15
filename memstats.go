@@ -65,8 +65,9 @@ func initializeMemStatsCollector(registry *Registry, mem *memStatsCollector) {
 	mem.gcPercCpu = registry.Gauge("gc.cpuPercentage", nil)
 }
 
-// Collect memory stats
-// https://golang.org/pkg/runtime/#MemStats
+// CollectMemStats collects memory stats
+//
+// See: https://golang.org/pkg/runtime/#MemStats
 func CollectMemStats(registry *Registry) {
 	var mem memStatsCollector
 	initializeMemStatsCollector(registry, &mem)

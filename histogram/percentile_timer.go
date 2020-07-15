@@ -2,9 +2,10 @@ package histogram
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/Netflix/spectator-go"
 	"github.com/pkg/errors"
-	"time"
 )
 
 var timerTagValues []string
@@ -18,6 +19,8 @@ func init() {
 	}
 }
 
+// PercentileTimer represents timing events, while capturing the histogram
+// (percentiles) of those values.
 type PercentileTimer struct {
 	registry *spectator.Registry
 	id       *spectator.Id
@@ -28,13 +31,17 @@ type PercentileTimer struct {
 }
 
 // default min and max durations we track
-const defaultMinTime = 10 * time.Millisecond
-const defaultMaxTime = 60 * time.Second
+const (
+	defaultMinTime = 10 * time.Millisecond
+	defaultMaxTime = 60 * time.Second
+)
 
+// NewPercentileTimer creates a new *PercentileTimer using the registry to create the meter identifier.
 func NewPercentileTimer(registry *spectator.Registry, name string, tags map[string]string) *PercentileTimer {
 	return NewPercentileTimerWithIdRange(registry, registry.NewId(name, tags), defaultMinTime, defaultMaxTime)
 }
 
+// NewPercentileTimerWithId creates a new *PercentileTimer using the meter identifier.
 func NewPercentileTimerWithId(registry *spectator.Registry, id *spectator.Id) *PercentileTimer {
 	return NewPercentileTimerWithIdRange(registry, id, defaultMinTime, defaultMaxTime)
 }
@@ -66,6 +73,9 @@ func (b *percTimerBuilder) Build() (*PercentileTimer, error) {
 	return NewPercentileTimerWithIdRange(b.registry, id, b.min, b.max), nil
 }
 
+// PercentileTimerBuilder returns a builder of the *PercentileTimer, which has
+// some default values. You do this by calling the Build method on the returned
+// value.
 func PercentileTimerBuilder() *percTimerBuilder {
 	return &percTimerBuilder{min: defaultMinTime, max: defaultMaxTime}
 }
@@ -96,10 +106,12 @@ func (b *percTimerBuilder) WithRange(minDuration time.Duration, maxDuration time
 	return b
 }
 
+// NewPercentileTimerWithIdRange creates a new *PercentileTimer, while
+// specifying the minimum / maximum range.
 func NewPercentileTimerWithIdRange(registry *spectator.Registry, id *spectator.Id,
 	minDuration time.Duration, maxDuration time.Duration) *PercentileTimer {
 	timer := registry.TimerWithId(id)
-	var counters = make([]*spectator.Counter, PercentileBucketsLength())
+	counters := make([]*spectator.Counter, PercentileBucketsLength())
 	for i := 0; i < PercentileBucketsLength(); i++ {
 		counters[i] = counterFor(registry, id, i, timerTagValues)
 	}
@@ -116,22 +128,26 @@ func restrict(amount time.Duration, min time.Duration, max time.Duration) time.D
 	return r
 }
 
+// Record records the value for a single event.
 func (t *PercentileTimer) Record(amount time.Duration) {
 	t.timer.Record(amount)
 	restricted := restrict(amount, t.min, t.max)
 	t.counters[PercentileBucketsIndex(restricted.Nanoseconds())].Increment()
 }
 
+// Count returns the count of timed events.
 func (t *PercentileTimer) Count() int64 {
 	return t.timer.Count()
 }
 
+// TotalTime returns the total duration.
 func (t *PercentileTimer) TotalTime() time.Duration {
 	return t.timer.TotalTime()
 }
 
+// Percentile returns the latency for a specific percentile.
 func (t *PercentileTimer) Percentile(p float64) float64 {
-	var counts = make([]int64, PercentileBucketsLength())
+	counts := make([]int64, PercentileBucketsLength())
 	for i, c := range t.counters {
 		counts[i] = int64(c.Count())
 	}

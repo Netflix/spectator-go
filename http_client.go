@@ -15,11 +15,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+// HttpClient represents a spectator HTTP client.
 type HttpClient struct {
 	registry *Registry
 	client   *http.Client
 }
 
+// NewHttpClient generates a new *HttpClient, allowing us to specify the timeout on requests.
 func NewHttpClient(registry *Registry, timeout time.Duration) *HttpClient {
 	return &HttpClient{registry, newSingleHostClient(timeout)}
 }
@@ -65,6 +67,7 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 
 const maxAttempts = 3
 
+// HttpResponse represents a read HTTP response.
 type HttpResponse struct {
 	status int
 	body   []byte
@@ -133,6 +136,8 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	return
 }
 
+// PostJson attempts to submit JSON to the uri, with a 100 ms delay between
+// failures.
 func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (response HttpResponse, err error) {
 	for attemptNumber := 0; attemptNumber < maxAttempts; attemptNumber += 1 {
 		response, err = h.doHttpPost(uri, jsonBytes, attemptNumber)
@@ -145,6 +150,7 @@ func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (response HttpRespon
 	}
 	return
 }
+
 func newSingleHostClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,

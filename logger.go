@@ -5,12 +5,15 @@ import (
 	"os"
 )
 
+// Logger represents the shape of the logging dependency that the spectator
+// library expects.
 type Logger interface {
 	Debugf(format string, v ...interface{})
 	Infof(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
 }
 
+// DefaultLogger is a plain text stdout logger.
 type DefaultLogger struct {
 	debug *log.Logger
 	info  *log.Logger
@@ -31,14 +34,17 @@ func defaultLogger() *DefaultLogger {
 	}
 }
 
+// Debugf is for debug level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Debugf(format string, v ...interface{}) {
 	l.debug.Printf(format, v...)
 }
 
+// Infof is for info level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Infof(format string, v ...interface{}) {
 	l.info.Printf(format, v...)
 }
 
+// Errorf is for error level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Errorf(format string, v ...interface{}) {
 	l.error.Printf(format, v...)
 }
