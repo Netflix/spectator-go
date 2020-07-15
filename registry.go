@@ -1,3 +1,9 @@
+// Package spectator provides a minimal Go implementation of the Netflix Java
+// Spectator library. The goal of this package is to allow Go programs to emit
+// metrics to Atlas.
+//
+// Please refer to the Java Spectator documentation for information on
+// spectator / Atlas fundamentals: https://netflix.github.io/spectator/en/latest/
 package spectator
 
 import (
@@ -12,11 +18,13 @@ import (
 	"time"
 )
 
+// Meter represents the functionality presented by the individual meter types.
 type Meter interface {
 	MeterId() *Id
 	Measure() []Measurement
 }
 
+// Config represents the Registry's configuration.
 type Config struct {
 	Frequency      time.Duration     `json:"frequency"`
 	Timeout        time.Duration     `json:"timeout"`
@@ -28,6 +36,7 @@ type Config struct {
 	IpcTimerRecord func(registry *Registry, id *Id, duration time.Duration)
 }
 
+// Registry is the collection of meters being reported.
 type Registry struct {
 	clock          Clock
 	config         *Config
@@ -42,6 +51,13 @@ type Registry struct {
 	quit           chan struct{}
 }
 
+// NewRegistryConfiguredBy loads a new Config JSON file from disk at the path
+// specified.
+//
+// Please note, when this method is used to load the configuration both
+// Config.Frequency and Config.Timeout are assumed to not be a time.Duration but
+// an int64 with second precision. As such this function multiplies those
+// configuration values by time.Second, to convert them to time.Duration values.
 func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 	path := filepath.Clean(filePath)
 	/* #nosec G304 */
@@ -61,6 +77,14 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 	return NewRegistry(&config), nil
 }
 
+// NewRegistry generates a new registry from the config.
+//
+// If the config.IpcTimerRecord is unset, a default implementation is used.
+//
+// If config.IsEnabled is unset, it defaults to an implementation that returns
+// true.
+//
+// If config.Log is unset, it defaults to using the default logger.
 func NewRegistry(config *Config) *Registry {
 	if config.IpcTimerRecord == nil {
 		config.IpcTimerRecord = func(registry *Registry, id *Id, duration time.Duration) {
@@ -74,9 +98,13 @@ func NewRegistry(config *Config) *Registry {
 		config.Log = defaultLogger()
 	}
 
-	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
+	r := &Registry{
+		&SystemClock{}, config,
+		map[string]Meter{},
+		false,
 		&sync.Mutex{}, nil, nil, nil, nil, nil,
-		make(chan struct{})}
+		make(chan struct{}),
+	}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	r.sentMetrics = r.Counter("spectator.measurements",
 		map[string]string{"id": "sent"})
@@ -90,17 +118,20 @@ func NewRegistry(config *Config) *Registry {
 	return r
 }
 
-// for testing
+// NewRegistryWithClock returns a new registry with the clock overriden to the
+// one injected here. This function is mostly used for testing.
 func NewRegistryWithClock(config *Config, clock Clock) *Registry {
 	r := NewRegistry(config)
 	r.clock = clock
 	return r
 }
 
+// GetLogger returns the internal logger.
 func (r *Registry) GetLogger() Logger {
 	return r.config.Log
 }
 
+// Meters returns all the internal meters.
 func (r *Registry) Meters() []Meter {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -112,14 +143,17 @@ func (r *Registry) Meters() []Meter {
 	return meters
 }
 
+// Clock returns the internal clock.
 func (r *Registry) Clock() Clock {
 	return r.clock
 }
 
+// SetLogger overrides the internal logger.
 func (r *Registry) SetLogger(logger Logger) {
 	r.config.Log = logger
 }
 
+// Start spins-up the background goroutine(s) for emitting collected metrics.
 func (r *Registry) Start() error {
 	if r.config == nil || r.config.Uri == "" {
 		err := fmt.Sprintf("registry config has no uri. Ignoring Start request")
@@ -153,6 +187,7 @@ func (r *Registry) Start() error {
 	return nil
 }
 
+// Stop shuts down the running goroutine(s), and attempts to flush the metrics.
 func (r *Registry) Stop() {
 	close(r.quit)
 	r.started = false
@@ -169,6 +204,7 @@ func shouldSendMeasurement(measurement Measurement) bool {
 	return isGauge || v >= 0
 }
 
+// Measurements returns the list of internal measurements that should be sent.
 func (r *Registry) Measurements() []Measurement {
 	var measurements []Measurement
 	r.mutex.Lock()
@@ -268,7 +304,7 @@ func (r *Registry) publish() {
 }
 
 func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measurement) map[string]int {
-	var strTable = make(map[string]int)
+	strTable := make(map[string]int)
 	commonTags := r.config.CommonTags
 	for k, v := range commonTags {
 		strTable[k] = 0
@@ -342,8 +378,13 @@ func (r *Registry) measurementsToJson(measurements []Measurement) ([]byte, error
 	return json.Marshal(payload)
 }
 
+// MeterFactoryFun is a type to allow dependency injection of the function used to generate meters.
 type MeterFactoryFun func() Meter
 
+// NewMeter registers a new meter internally, and then returns it to the caller.
+// The meterFactory is used to generate this meter. If the id.MapKey() is
+// already present in the internal collection, that is returned instead of
+// creating a new one.
 func (r *Registry) NewMeter(id *Id, meterFactory MeterFactoryFun) Meter {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -355,10 +396,12 @@ func (r *Registry) NewMeter(id *Id, meterFactory MeterFactoryFun) Meter {
 	return meter
 }
 
+// NewId calls spectator.NewId().
 func (r *Registry) NewId(name string, tags map[string]string) *Id {
 	return NewId(name, tags)
 }
 
+// CounterWithId returns a new *Counter, using the provided meter identifier.
 func (r *Registry) CounterWithId(id *Id) *Counter {
 	m := r.NewMeter(id, func() Meter {
 		return NewCounter(id)
@@ -375,10 +418,13 @@ func (r *Registry) CounterWithId(id *Id) *Counter {
 	return NewCounter(id)
 }
 
+// Counter calls NewId() with the name and tags, and then calls r.CounterWithId()
+// using that *Id.
 func (r *Registry) Counter(name string, tags map[string]string) *Counter {
 	return r.CounterWithId(NewId(name, tags))
 }
 
+// TimerWithId returns a new *Timer, using the provided meter identifier.
 func (r *Registry) TimerWithId(id *Id) *Timer {
 	m := r.NewMeter(id, func() Meter {
 		return NewTimer(id)
@@ -395,10 +441,13 @@ func (r *Registry) TimerWithId(id *Id) *Timer {
 	return NewTimer(id)
 }
 
+// Timer calls NewId() with the name and tags, and then calls r.TimerWithId()
+// using that *Id.
 func (r *Registry) Timer(name string, tags map[string]string) *Timer {
 	return r.TimerWithId(NewId(name, tags))
 }
 
+// GaugeWithId returns a new *Gauge, using the provided meter identifier.
 func (r *Registry) GaugeWithId(id *Id) *Gauge {
 	m := r.NewMeter(id, func() Meter {
 		return NewGauge(id)
@@ -415,10 +464,14 @@ func (r *Registry) GaugeWithId(id *Id) *Gauge {
 	return NewGauge(id)
 }
 
+// Gauge calls NewId() with the name and tags, and then calls r.GaugeWithId()
+// using that *Id.
 func (r *Registry) Gauge(name string, tags map[string]string) *Gauge {
 	return r.GaugeWithId(NewId(name, tags))
 }
 
+// DistributionSummaryWithId returns a new *DistributionSummary, using the
+// provided meter identifier.
 func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
 	m := r.NewMeter(id, func() Meter {
 		return NewDistributionSummary(id)
@@ -435,6 +488,8 @@ func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
 	return NewDistributionSummary(id)
 }
 
+// DistributionSummary calls NewId() using the name and tags, and then calls
+// r.DistributionSummaryWithId() using that *Id.
 func (r *Registry) DistributionSummary(name string, tags map[string]string) *DistributionSummary {
 	return r.DistributionSummaryWithId(NewId(name, tags))
 }

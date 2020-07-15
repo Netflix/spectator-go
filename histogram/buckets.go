@@ -1,13 +1,16 @@
 package histogram
 
 import (
-	"github.com/Netflix/spectator-go"
 	"math"
 	"math/bits"
+
+	"github.com/Netflix/spectator-go"
 )
 
-var bucketValues []int64
-var powerOf4Index []int
+var (
+	bucketValues  []int64
+	powerOf4Index []int
+)
 
 func init() {
 	const DIGITS uint8 = 2
@@ -34,10 +37,13 @@ func counterFor(registry *spectator.Registry, id *spectator.Id, i int, tagValues
 	return registry.CounterWithId(id.WithTags(tags))
 }
 
+// PercentileBucketsLength returns the lengths of the package local bucketValues
+// variable, to give an idea of how many buckets exist.
 func PercentileBucketsLength() int {
 	return len(bucketValues)
 }
 
+// PercentileBucketsIndex calculates which bucket handles that specific value.
 func PercentileBucketsIndex(v int64) int {
 	if v <= 0 {
 		return 0
@@ -64,10 +70,13 @@ func PercentileBucketsIndex(v int64) int {
 	}
 }
 
+// PercentileBucketsBucket returns the bucketValue for the specific value.
 func PercentileBucketsBucket(v int64) int64 {
 	return bucketValues[PercentileBucketsIndex(v)]
 }
 
+// PercentileBucketsPercentiles takes the counts, and desired percentiles, and
+// generates the proper results.
 func PercentileBucketsPercentiles(counts []int64, pcts []float64) []float64 {
 	results := make([]float64, len(pcts))
 	total := float64(0)
@@ -96,6 +105,8 @@ func PercentileBucketsPercentiles(counts []int64, pcts []float64) []float64 {
 	return results
 }
 
+// PercentileBucketsPercentile takes the counts, and returns the requested
+// percentile value based on the counts.
 func PercentileBucketsPercentile(counts []int64, pct float64) float64 {
 	pcts := make([]float64, 1)
 	pcts[0] = pct

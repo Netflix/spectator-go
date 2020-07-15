@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// Timer is used to measure how long (in seconds) some event is taking. This
+// type is safe for concurrent use.
 type Timer struct {
 	id             *Id
 	count          int64
@@ -13,14 +15,17 @@ type Timer struct {
 	max            int64
 }
 
+// NewTimer generates a new timer, using the provided meter identifier.
 func NewTimer(id *Id) *Timer {
 	return &Timer{id, 0, 0, 0, 0}
 }
 
+// MeterId returns the meter identifier.
 func (t *Timer) MeterId() *Id {
 	return t.id
 }
 
+// Record records the duration this specific event took.
 func (t *Timer) Record(amount time.Duration) {
 	if amount >= 0 {
 		atomic.AddInt64(&t.count, 1)
@@ -30,14 +35,23 @@ func (t *Timer) Record(amount time.Duration) {
 	}
 }
 
+// Count returns the number of unique times that have been recorded.
 func (t *Timer) Count() int64 {
 	return atomic.LoadInt64(&t.count)
 }
 
+// TotalTime returns the total duration of all recorded events.
 func (t *Timer) TotalTime() time.Duration {
 	return time.Duration(atomic.LoadInt64(&t.totalTime))
 }
 
+// Measure returns the list of measurements known by the counter. This should
+// return 4 measurements in the slice:
+//
+// count
+// totalTime
+// totalOfSquares
+// max
 func (t *Timer) Measure() []Measurement {
 	cnt := Measurement{t.id.WithStat("count"), float64(atomic.SwapInt64(&t.count, 0))}
 	totalNanos := atomic.SwapInt64(&t.totalTime, 0)
