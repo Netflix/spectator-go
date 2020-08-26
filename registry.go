@@ -7,8 +7,10 @@
 package spectator
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io/ioutil"
 	"math"
 	"path/filepath"
@@ -31,6 +33,7 @@ type Config struct {
 	Uri            string            `json:"uri"`
 	BatchSize      int               `json:"batch_size"`
 	CommonTags     map[string]string `json:"common_tags"`
+	PublishWorkers int64             `json:"publish_workers"`
 	Log            Logger
 	IsEnabled      func() bool
 	IpcTimerRecord func(registry *Registry, id *Id, duration time.Duration)
@@ -49,6 +52,7 @@ type Registry struct {
 	droppedHttp    *Counter
 	droppedOther   *Counter
 	quit           chan struct{}
+	publishSync    *semaphore.Weighted
 }
 
 // NewRegistryConfiguredBy loads a new Config JSON file from disk at the path
@@ -98,12 +102,17 @@ func NewRegistry(config *Config) *Registry {
 		config.Log = defaultLogger()
 	}
 
+	if config.PublishWorkers < 1 {
+		config.PublishWorkers = 1
+	}
+
 	r := &Registry{
 		&SystemClock{}, config,
 		map[string]Meter{},
 		false,
 		&sync.Mutex{}, nil, nil, nil, nil, nil,
 		make(chan struct{}),
+		semaphore.NewWeighted(config.PublishWorkers),
 	}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	r.sentMetrics = r.Counter("spectator.measurements",
@@ -294,13 +303,26 @@ func (r *Registry) publish() {
 		return
 	}
 
+	wg := new(sync.WaitGroup)
 	for i := 0; i < len(measurements); i += r.config.BatchSize {
 		end := i + r.config.BatchSize
 		if end > len(measurements) {
 			end = len(measurements)
 		}
-		r.sendBatch(measurements[i:end])
+		err := r.publishSync.Acquire(context.Background(), 1)
+		if err != nil {
+			r.config.Log.Errorf("Unable to acquire semaphore: %v.", err)
+			return
+		}
+		wg.Add(1)
+		go func(m []Measurement) {
+			r.sendBatch(m)
+			r.publishSync.Release(1)
+			wg.Done()
+		}(measurements[i:end])
 	}
+
+	wg.Wait()
 }
 
 func (r *Registry) buildStringTable(payload *[]interface{}, measurements []Measurement) map[string]int {
