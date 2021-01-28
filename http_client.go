@@ -49,49 +49,50 @@ var gzipWriterPool = &sync.Pool{
 	},
 }
 
-const JsonType = "application/json"
-const CompressThreshold = 512
+const jsonType = "application/json"
+const compressThreshold = 512
 
-func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, error) {
-	compressed := len(jsonBytes) > CompressThreshold
-	var payloadBuffer *bytes.Buffer
+func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, func(), error) {
+	compressed := len(jsonBytes) > compressThreshold
+	payloadBuffer := payloadPool.Get().(*bytes.Buffer)
+	var g *gzip.Writer
 	if compressed {
-		payloadBuffer = payloadPool.Get().(*bytes.Buffer)
-		g := gzipWriterPool.Get().(*gzip.Writer)
+		g = gzipWriterPool.Get().(*gzip.Writer)
 		g.Reset(payloadBuffer)
 		defer func() {
 			if err := g.Close(); err != nil {
 				log.Printf("closing gzip writer: %v", err)
 			}
 			gzipWriterPool.Put(g)
-			payloadBuffer.Reset()
-			payloadPool.Put(payloadBuffer)
 		}()
 
 		if _, err := g.Write(jsonBytes); err != nil {
-			return nil, errors.Wrap(err, "Unable to compress json payload")
+			return nil, func() {}, errors.Wrap(err, "Unable to compress json payload")
 		}
 		if err := g.Flush(); err != nil {
-			return nil, errors.Wrap(err, "Unable to flush gzip stream")
+			return nil, func() {}, errors.Wrap(err, "Unable to flush gzip stream")
 		}
+
 		if err := g.Close(); err != nil {
-			return nil, errors.Wrap(err, "Unable to close gzip stream")
+			log.Printf("closing gzip writer: %v", err)
+			return nil, func() {}, errors.Wrap(err, "Unable to close gzip stream")
 		}
-	} else {
-		payloadBuffer = bytes.NewBuffer(jsonBytes)
 	}
 
 	req, err := http.NewRequest("POST", uri, payloadBuffer)
 	if err != nil {
-		return nil, err
+		return nil, func() {}, err
 	}
 	req.Header.Set("User-Agent", "spectator-go")
-	req.Header.Set("Accept", JsonType)
-	req.Header.Set("Content-Type", JsonType)
+	req.Header.Set("Accept", jsonType)
+	req.Header.Set("Content-Type", jsonType)
 	if compressed {
 		req.Header.Set("Content-Encoding", "gzip")
 	}
-	return req, nil
+	return req, func() {
+		payloadBuffer.Reset()
+		payloadPool.Put(payloadBuffer)
+	}, nil
 }
 
 const maxAttempts = 3
@@ -107,13 +108,17 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	response.status = -1
 	log := h.registry.GetLogger()
 	var req *http.Request
-	req, err = h.createPayloadRequest(uri, jsonBytes)
+	var cleanup func()
+	req, cleanup, err = h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {
 		panic(err)
 	}
 	entry := NewLogEntry(h.registry, "POST", uri)
 	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
-	defer h.client.CloseIdleConnections()
+	defer func() {
+		cleanup()
+		h.client.CloseIdleConnections()
+	}()
 	resp, err := h.client.Do(req)
 	if err != nil {
 		var status string
