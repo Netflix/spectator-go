@@ -71,6 +71,9 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 		if _, err := g.Write(jsonBytes); err != nil {
 			return nil, errors.Wrap(err, "Unable to compress json payload")
 		}
+		if err := g.Flush(); err != nil {
+			return nil, errors.Wrap(err, "Unable to flush gzip stream")
+		}
 		if err := g.Close(); err != nil {
 			return nil, errors.Wrap(err, "Unable to close gzip stream")
 		}
