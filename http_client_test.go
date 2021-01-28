@@ -1,7 +1,6 @@
 package spectator
 
 import (
-	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"

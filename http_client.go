@@ -2,15 +2,18 @@ package spectator
 
 import (
 	"bytes"
-	"compress/gzip"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/pkg/errors"
 )
@@ -34,14 +37,37 @@ func userFriendlyErr(errStr string) string {
 	return "HttpErr"
 }
 
+var payloadPool = &sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(nil)
+	},
+}
+
+var gzipWriterPool = &sync.Pool{
+	New: func() interface{} {
+		return gzip.NewWriter(nil)
+	},
+}
+
+const JsonType = "application/json"
+const CompressThreshold = 512
+
 func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, error) {
-	const JsonType = "application/json"
-	const CompressThreshold = 512
 	compressed := len(jsonBytes) > CompressThreshold
 	var payloadBuffer *bytes.Buffer
 	if compressed {
-		payloadBuffer = &bytes.Buffer{}
-		g := gzip.NewWriter(payloadBuffer)
+		payloadBuffer = payloadPool.Get().(*bytes.Buffer)
+		g := gzipWriterPool.Get().(*gzip.Writer)
+		g.Reset(payloadBuffer)
+		defer func() {
+			if err := g.Close(); err != nil {
+				log.Printf("closing gzip writer: %v", err)
+			}
+			gzipWriterPool.Put(g)
+			payloadBuffer.Reset()
+			payloadPool.Put(payloadBuffer)
+		}()
+
 		if _, err := g.Write(jsonBytes); err != nil {
 			return nil, errors.Wrap(err, "Unable to compress json payload")
 		}

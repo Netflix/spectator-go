@@ -8,9 +8,7 @@ package spectator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"io/ioutil"
 	"math"
 	"path/filepath"
@@ -18,7 +16,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/semaphore"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Meter represents the functionality presented by the individual meter types.
 type Meter interface {
