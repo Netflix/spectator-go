@@ -77,6 +77,10 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 			log.Printf("closing gzip writer: %v", err)
 			return nil, func() {}, errors.Wrap(err, "Unable to close gzip stream")
 		}
+	} else {
+		if _, err := payloadBuffer.Write(jsonBytes); err != nil {
+			return nil, func() {}, errors.Wrap(err, "write json to buffer")
+		}
 	}
 
 	req, err := http.NewRequest("POST", uri, payloadBuffer)
