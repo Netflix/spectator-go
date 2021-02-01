@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -53,6 +52,7 @@ const jsonType = "application/json"
 const compressThreshold = 512
 
 func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, func(), error) {
+	log := h.registry.GetLogger()
 	compressed := len(jsonBytes) > compressThreshold
 	payloadBuffer := payloadPool.Get().(*bytes.Buffer)
 	var g *gzip.Writer
@@ -61,7 +61,7 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 		g.Reset(payloadBuffer)
 		defer func() {
 			if err := g.Close(); err != nil {
-				log.Printf("closing gzip writer: %v", err)
+				log.Infof("closing gzip writer, best effort: %v", err)
 			}
 			gzipWriterPool.Put(g)
 		}()
@@ -74,7 +74,6 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 		}
 
 		if err := g.Close(); err != nil {
-			log.Printf("closing gzip writer: %v", err)
 			return nil, func() {}, errors.Wrap(err, "Unable to close gzip stream")
 		}
 	} else {
