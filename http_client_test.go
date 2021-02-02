@@ -1,9 +1,10 @@
 package spectator
 
 import (
-	"encoding/json"
+	"compress/gzip"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -32,6 +33,161 @@ func myMeters(registry *Registry) []Meter {
 		}
 	}
 	return myMeters
+}
+
+func TestHttpClient_PostJson503_Compress(t *testing.T) {
+	const StartTime = 1
+	clock := &ManualClock{StartTime}
+	expectedBody := String(640)
+	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyReader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Error("Unable to get gzip reader", err)
+		}
+
+		body, err := ioutil.ReadAll(bodyReader)
+		if err != nil {
+			t.Error("Unable to read body", err)
+		}
+		bodyStr := string(body)
+		if bodyStr != expectedBody {
+			t.Error("Unexpected body in request:", bodyStr)
+		}
+		w.WriteHeader(503)
+		_, _ = w.Write(errMsg)
+
+		contentType := r.Header.Get("Content-Type")
+		if contentType != "application/json" {
+			t.Errorf("Unexpected content-type: %s", contentType)
+		}
+		clock.SetNanos(StartTime + 1000)
+	})
+
+	server := httptest.NewServer(publishHandler)
+	defer server.Close()
+
+	serverUrl := server.URL
+
+	config := makeConfig(serverUrl)
+	registry := NewRegistryWithClock(config, clock)
+	client := NewHttpClient(registry, 100*time.Millisecond)
+
+	resp, err := client.PostJson(config.Uri, []byte(expectedBody))
+	if err != nil {
+		t.Fatal("Unexpected error", err)
+	}
+
+	if resp.status != 503 {
+		t.Error("Expected 503 response. Got", resp.status)
+	}
+
+	meters := myMeters(registry)
+	sort.Slice(meters, func(i, j int) bool {
+		return meters[i].MeterId().Tags()["ipc.attempt"] < meters[j].MeterId().Tags()["ipc.attempt"]
+	})
+	if len(meters) != 3 {
+		t.Fatal("Expected 1 meter, got", len(meters))
+	}
+
+	baseTags := map[string]string{
+		"owner":        "spectator-go",
+		"http.method":  "POST",
+		"http.status":  "503",
+		"ipc.endpoint": "/",
+		"ipc.result":   "failure",
+		"ipc.status":   "http-error",
+	}
+	initial := map[string]string{
+		"ipc.attempt":       "initial",
+		"ipc.attempt.final": "false",
+	}
+	second := map[string]string{
+		"ipc.attempt":       "second",
+		"ipc.attempt.final": "false",
+	}
+	final := map[string]string{
+		"ipc.attempt":       "third_up",
+		"ipc.attempt.final": "true",
+	}
+	extra := []map[string]string{initial, second, final}
+
+	for i, m := range meters {
+		if m.MeterId().Name() != "ipc.client.call" {
+			t.Errorf("Expected ipc.client.call got %s (%v)", m.MeterId().Name(), m.MeterId())
+		}
+		assertTags(t, m.MeterId().Tags(), baseTags, extra[i])
+	}
+}
+
+func TestHttpClient_PostJsonOk_Compress(t *testing.T) {
+	var log Logger
+	const StartTime = 1
+	clock := &ManualClock{StartTime}
+	expectedBody := String(640)
+	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyReader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Error("Unable to get gzip reader", err)
+		}
+
+		body, err := ioutil.ReadAll(bodyReader)
+		if err != nil {
+			t.Error("Unable to read body", err)
+		}
+		bodyStr := string(body)
+		if bodyStr != expectedBody {
+			t.Error("Unexpected body in request:", bodyStr)
+		}
+		_, _ = w.Write(okMsg)
+
+		contentType := r.Header.Get("Content-Type")
+		if contentType != "application/json" {
+			t.Errorf("Unexpected content-type: %s", contentType)
+		}
+		clock.SetNanos(StartTime + 1000)
+	})
+
+	server := httptest.NewServer(publishHandler)
+	defer server.Close()
+
+	serverUrl := server.URL
+
+	config := makeConfig(serverUrl)
+	registry := NewRegistryWithClock(config, clock)
+	log = registry.GetLogger()
+	client := NewHttpClient(registry, 100*time.Millisecond)
+
+	resp, err := client.PostJson(config.Uri, []byte(expectedBody))
+	if err != nil {
+		t.Error("Unexpected error", err)
+	}
+
+	if resp.status != 200 {
+		t.Error("Expected 200 response. Got", resp.status)
+	}
+
+	meters := myMeters(registry)
+	if len(meters) != 1 {
+		t.Fatal("Expected 1 meter, got", len(meters))
+	}
+
+	expectedTags := map[string]string{
+		"owner":             "spectator-go",
+		"http.method":       "POST",
+		"http.status":       "200",
+		"ipc.attempt":       "initial",
+		"ipc.attempt.final": "true",
+		"ipc.endpoint":      "/",
+		"ipc.result":        "success",
+		"ipc.status":        "success",
+	}
+	expectedId := NewId("ipc.client.call", expectedTags)
+	gotMeter := meters[0]
+	if expectedId.name != gotMeter.MeterId().name || !reflect.DeepEqual(expectedTags, gotMeter.MeterId().tags) {
+		log.Errorf("Unexpected meter registered. Expecting %v. Got %v", expectedId, gotMeter.MeterId())
+	}
+
+	assertTimer(t, gotMeter.(*Timer), 1, 1000, 1000*1000.0, 1000)
 }
 
 func TestHttpClient_PostJsonOk(t *testing.T) {
@@ -241,4 +397,16 @@ func assertTags(t *testing.T, actual, base, extra map[string]string) {
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected %v, got %v", expected, actual)
 	}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func String(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }

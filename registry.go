@@ -8,9 +8,7 @@ package spectator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"io/ioutil"
 	"math"
 	"path/filepath"
@@ -18,7 +16,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/semaphore"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Meter represents the functionality presented by the individual meter types.
 type Meter interface {
@@ -165,12 +168,12 @@ func (r *Registry) SetLogger(logger Logger) {
 // Start spins-up the background goroutine(s) for emitting collected metrics.
 func (r *Registry) Start() error {
 	if r.config == nil || r.config.Uri == "" {
-		err := fmt.Sprintf("registry config has no uri. Ignoring Start request")
+		err := "registry config has no uri. Ignoring Start request"
 		r.config.Log.Infof(err)
 		return fmt.Errorf(err)
 	}
 	if r.started {
-		err := fmt.Sprintf("registry has already started. Ignoring Start request")
+		err := "registry has already started. Ignoring Start request"
 		r.config.Log.Infof(err)
 		return fmt.Errorf(err)
 	}

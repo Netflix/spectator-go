@@ -2,15 +2,17 @@ package spectator
 
 import (
 	"bytes"
-	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/pkg/errors"
 )
@@ -34,35 +36,66 @@ func userFriendlyErr(errStr string) string {
 	return "HttpErr"
 }
 
-func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, error) {
-	const JsonType = "application/json"
-	const CompressThreshold = 512
-	compressed := len(jsonBytes) > CompressThreshold
-	var payloadBuffer *bytes.Buffer
+var payloadPool = &sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(nil)
+	},
+}
+
+var gzipWriterPool = &sync.Pool{
+	New: func() interface{} {
+		return gzip.NewWriter(nil)
+	},
+}
+
+const jsonType = "application/json"
+const compressThreshold = 512
+
+func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, func(), error) {
+	log := h.registry.GetLogger()
+	compressed := len(jsonBytes) > compressThreshold
+	payloadBuffer := payloadPool.Get().(*bytes.Buffer)
+	var g *gzip.Writer
 	if compressed {
-		payloadBuffer = &bytes.Buffer{}
-		g := gzip.NewWriter(payloadBuffer)
+		g = gzipWriterPool.Get().(*gzip.Writer)
+		g.Reset(payloadBuffer)
+		defer func() {
+			if err := g.Close(); err != nil {
+				log.Debugf("closing gzip writer, best effort: %v", err)
+			}
+			gzipWriterPool.Put(g)
+		}()
+
 		if _, err := g.Write(jsonBytes); err != nil {
-			return nil, errors.Wrap(err, "Unable to compress json payload")
+			return nil, func() {}, errors.Wrap(err, "Unable to compress json payload")
 		}
+		if err := g.Flush(); err != nil {
+			return nil, func() {}, errors.Wrap(err, "Unable to flush gzip stream")
+		}
+
 		if err := g.Close(); err != nil {
-			return nil, errors.Wrap(err, "Unable to close gzip stream")
+			return nil, func() {}, errors.Wrap(err, "Unable to close gzip stream")
 		}
 	} else {
-		payloadBuffer = bytes.NewBuffer(jsonBytes)
+		if _, err := payloadBuffer.Write(jsonBytes); err != nil {
+			return nil, func() {}, errors.Wrap(err, "write json to buffer")
+		}
 	}
 
 	req, err := http.NewRequest("POST", uri, payloadBuffer)
 	if err != nil {
-		return nil, err
+		return nil, func() {}, err
 	}
 	req.Header.Set("User-Agent", "spectator-go")
-	req.Header.Set("Accept", JsonType)
-	req.Header.Set("Content-Type", JsonType)
+	req.Header.Set("Accept", jsonType)
+	req.Header.Set("Content-Type", jsonType)
 	if compressed {
 		req.Header.Set("Content-Encoding", "gzip")
 	}
-	return req, nil
+	return req, func() {
+		payloadBuffer.Reset()
+		payloadPool.Put(payloadBuffer)
+	}, nil
 }
 
 const maxAttempts = 3
@@ -78,13 +111,17 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	response.status = -1
 	log := h.registry.GetLogger()
 	var req *http.Request
-	req, err = h.createPayloadRequest(uri, jsonBytes)
+	var cleanup func()
+	req, cleanup, err = h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {
 		panic(err)
 	}
 	entry := NewLogEntry(h.registry, "POST", uri)
 	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
-	defer h.client.CloseIdleConnections()
+	defer func() {
+		cleanup()
+		h.client.CloseIdleConnections()
+	}()
 	resp, err := h.client.Do(req)
 	if err != nil {
 		var status string
