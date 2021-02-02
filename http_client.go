@@ -61,7 +61,7 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 		g.Reset(payloadBuffer)
 		defer func() {
 			if err := g.Close(); err != nil {
-				log.Infof("closing gzip writer, best effort: %v", err)
+				log.Debugf("closing gzip writer, best effort: %v", err)
 			}
 			gzipWriterPool.Put(g)
 		}()
