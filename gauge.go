@@ -11,13 +11,15 @@ import "math"
 //
 // https://netflix.github.io/spectator/en/latest/intro/gauge/
 type Gauge struct {
-	id        *Id
 	valueBits uint64
+	// Pointers need to be after counters to ensure 64-bit alignment. See
+	// note in atomicnum.go
+	id        *Id
 }
 
 // NewGauge generates a new gauge, using the provided meter identifier.
 func NewGauge(id *Id) *Gauge {
-	return &Gauge{id, math.Float64bits(math.NaN())}
+	return &Gauge{math.Float64bits(math.NaN()), id}
 }
 
 // MeterId returns the meter identifier.

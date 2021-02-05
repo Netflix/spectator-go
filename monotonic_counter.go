@@ -8,9 +8,11 @@ import "sync/atomic"
 //
 // https://netflix.github.io/spectator/en/latest/intro/gauge/#monotonic-counters
 type MonotonicCounter struct {
+	value    int64
+	// Pointers need to be after counters to ensure 64-bit alignment. See
+	// note in atomicnum.go
 	registry *Registry
 	id       *Id
-	value    int64
 	counter  *Counter
 }
 
@@ -24,7 +26,7 @@ func NewMonotonicCounter(registry *Registry, name string, tags map[string]string
 // NewMonotonicCounterWithId generates a new monotonic counter, using the
 // provided meter identifier.
 func NewMonotonicCounterWithId(registry *Registry, id *Id) *MonotonicCounter {
-	return &MonotonicCounter{registry, id, 0, nil}
+	return &MonotonicCounter{0, registry, id, nil}
 }
 
 // Set adds amount to the current counter.

@@ -8,16 +8,18 @@ import (
 // Timer is used to measure how long (in seconds) some event is taking. This
 // type is safe for concurrent use.
 type Timer struct {
-	id             *Id
 	count          int64
 	totalTime      int64
 	totalOfSquares uint64
 	max            int64
+	// Pointers need to be after counters to ensure 64-bit alignment. See
+	// note in atomicnum.go
+	id             *Id
 }
 
 // NewTimer generates a new timer, using the provided meter identifier.
 func NewTimer(id *Id) *Timer {
-	return &Timer{id, 0, 0, 0, 0}
+	return &Timer{0, 0, 0, 0, id}
 }
 
 // MeterId returns the meter identifier.
