@@ -12,17 +12,19 @@ import (
 //
 // https://netflix.github.io/spectator/en/latest/intro/dist-summary/
 type DistributionSummary struct {
-	id          *Id
 	count       int64
 	totalAmount int64
 	totalSqBits uint64
 	max         int64
+	// Pointers need to be after counters to ensure 64-bit alignment. See
+	// note in atomicnum.go
+	id          *Id
 }
 
 // NewDistributionSummary generates a new distribution summary, using the
 // provided meter identifier.
 func NewDistributionSummary(id *Id) *DistributionSummary {
-	return &DistributionSummary{id, 0, 0, 0, 0}
+	return &DistributionSummary{0, 0, 0, 0, id}
 }
 
 // MeterId returns the meter identifier.

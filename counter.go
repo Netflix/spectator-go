@@ -8,13 +8,15 @@ package spectator
 //
 // https://netflix.github.io/spectator/en/latest/intro/counter/
 type Counter struct {
-	id    *Id
 	count uint64
+	// Pointers need to be after counters to ensure 64-bit alignment. See
+	// note in atomicnum.go
+	id    *Id
 }
 
 // NewCounter generates a new counter, using the provided meter identifier.
 func NewCounter(id *Id) *Counter {
-	return &Counter{id, 0}
+	return &Counter{0, id}
 }
 
 // MeterId returns the meter identifier.
