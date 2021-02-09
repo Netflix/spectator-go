@@ -27,7 +27,7 @@ func (id *Id) MapKey() string {
 	if err != nil {
 		return errKey
 	}
-	var keys []string
+	keys := make([]string, 0, len(id.tags))
 	for k := range id.tags {
 		keys = append(keys, k)
 	}
