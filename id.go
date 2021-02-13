@@ -1,9 +1,10 @@
 package spectator
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
+	"strings"
+	"sync"
 )
 
 // Id represents a meter's identifying information and dimensions (tags).
@@ -11,6 +12,12 @@ type Id struct {
 	name string
 	tags map[string]string
 	key  string
+}
+
+var builderPool = &sync.Pool{
+	New: func() interface{} {
+		return &strings.Builder{}
+	},
 }
 
 // MapKey computes and saves a key within the struct to be used to uniquely
@@ -21,7 +28,9 @@ func (id *Id) MapKey() string {
 		return id.key
 	}
 
-	var buf bytes.Buffer
+	buf := builderPool.Get().(*strings.Builder)
+	buf.Reset()
+	defer builderPool.Put(buf)
 	_, err := buf.WriteString(id.name)
 	const errKey = "ERR"
 	if err != nil {
