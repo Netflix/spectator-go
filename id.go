@@ -11,7 +11,10 @@ import (
 type Id struct {
 	name string
 	tags map[string]string
-	key  string
+	// keyOnce protects access to key, allowing it to be computed on demand
+	// without racing other readers.
+	keyOnce sync.Once
+	key     string
 }
 
 var builderPool = &sync.Pool{
@@ -24,44 +27,51 @@ var builderPool = &sync.Pool{
 // identify this *Id in a map. This does use the information from within the
 // *Id, so it assumes you've not accidentally double-declared this *Id.
 func (id *Id) MapKey() string {
-	if len(id.key) > 0 {
-		return id.key
-	}
+	id.keyOnce.Do(func() {
+		// if the key was set directly during Id construction, then do not
+		// compute a value.
+		if id.key != "" {
+			return
+		}
 
-	buf := builderPool.Get().(*strings.Builder)
-	buf.Reset()
-	defer builderPool.Put(buf)
-	_, err := buf.WriteString(id.name)
-	const errKey = "ERR"
-	if err != nil {
-		return errKey
-	}
-	keys := make([]string, 0, len(id.tags))
-	for k := range id.tags {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+		buf := builderPool.Get().(*strings.Builder)
+		buf.Reset()
+		defer builderPool.Put(buf)
 
-	for _, k := range keys {
-		v := id.tags[k]
-		_, err = buf.WriteRune('|')
-		if err != nil {
-			return errKey
-		}
-		_, err = buf.WriteString(k)
-		if err != nil {
-			return errKey
-		}
-		_, err = buf.WriteRune('|')
-		if err != nil {
-			return errKey
-		}
-		_, err = buf.WriteString(v)
-		if err != nil {
-			return errKey
-		}
-	}
-	id.key = buf.String()
+		const errKey = "ERR"
+		id.key = func() string {
+			_, err := buf.WriteString(id.name)
+			if err != nil {
+				return errKey
+			}
+			keys := make([]string, 0, len(id.tags))
+			for k := range id.tags {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, k := range keys {
+				v := id.tags[k]
+				_, err = buf.WriteRune('|')
+				if err != nil {
+					return errKey
+				}
+				_, err = buf.WriteString(k)
+				if err != nil {
+					return errKey
+				}
+				_, err = buf.WriteRune('|')
+				if err != nil {
+					return errKey
+				}
+				_, err = buf.WriteString(v)
+				if err != nil {
+					return errKey
+				}
+			}
+			return buf.String()
+		}()
+	})
 	return id.key
 }
 
@@ -72,7 +82,10 @@ func NewId(name string, tags map[string]string) *Id {
 	for k, v := range tags {
 		myTags[k] = v
 	}
-	return &Id{name, myTags, ""}
+	return &Id{
+		name: name,
+		tags: myTags,
+	}
 }
 
 // WithTag creates a deep copy of the *Id, adding the requested tag to the
