@@ -1,6 +1,9 @@
 package spectator
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 // Clock is an interface to provide functionality to create timing/latency
 // metrics.
@@ -38,17 +41,17 @@ func (c *ManualClock) Now() time.Time {
 
 // Nanos returns the internal nanoseconds. Satisfies Clock interface.
 func (c *ManualClock) Nanos() int64 {
-	return c.nanos
+	return atomic.LoadInt64(&c.nanos)
 }
 
 // SetFromDuration takes a duration, and sets that to the internal nanosecond
 // value. The .Now() probably has no value when this is used to populate the
 // data.
 func (c *ManualClock) SetFromDuration(duration time.Duration) {
-	c.nanos = int64(duration)
+	atomic.StoreInt64(&c.nanos, int64(duration))
 }
 
 // SetNanos sets the internal nanoseconds value directly.
 func (c *ManualClock) SetNanos(nanos int64) {
-	c.nanos = nanos
+	atomic.StoreInt64(&c.nanos, nanos)
 }

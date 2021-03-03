@@ -86,7 +86,7 @@ func TestHttpClient_PostJson503_Compress(t *testing.T) {
 		return meters[i].MeterId().Tags()["ipc.attempt"] < meters[j].MeterId().Tags()["ipc.attempt"]
 	})
 	if len(meters) != 3 {
-		t.Fatal("Expected 1 meter, got", len(meters))
+		t.Fatal("Expected 3 meters, got", len(meters))
 	}
 
 	baseTags := map[string]string{
@@ -353,7 +353,7 @@ func TestHttpClient_PostJson503(t *testing.T) {
 		return meters[i].MeterId().Tags()["ipc.attempt"] < meters[j].MeterId().Tags()["ipc.attempt"]
 	})
 	if len(meters) != 3 {
-		t.Fatal("Expected 1 meter, got", len(meters))
+		t.Fatal("Expected 3 meters, got", len(meters))
 	}
 
 	baseTags := map[string]string{

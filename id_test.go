@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -14,11 +15,31 @@ func TestId_mapKey(t *testing.T) {
 		t.Error("Expected foo, got", k)
 	}
 
-	reusesKey := Id{"foo", nil, "bar"}
+	reusesKey := Id{
+		name: "foo",
+		key:  "bar",
+	}
 	k2 := reusesKey.MapKey()
 	if k2 != "bar" {
 		t.Error("Expected MapKey to be reused: bar !=", k2)
 	}
+}
+
+func TestId_mapKeyConcurrent(t *testing.T) {
+	id := NewId("foo", nil)
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		_ = id.MapKey()
+		wg.Done()
+	}()
+	go func() {
+		_ = id.MapKey()
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 func TestId_mapKeySortsTags(t *testing.T) {
