@@ -264,7 +264,7 @@ func (r *Registry) sendBatch(measurements []Measurement) {
 		} else {
 			sent := int64(0)
 			dropped := int64(0)
-			if resp.status == 200 {
+			if resp.status == 200 || resp.status == 202 {
 				sent = numMeasurements
 			} else if resp.status < 500 {
 				var atlasResponse atlasMessage
