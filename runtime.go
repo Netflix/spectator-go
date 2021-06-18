@@ -21,8 +21,8 @@ func goRuntimeStats(s *sysStatsCollector) {
 func CollectSysStats(registry *Registry) {
 	var s sysStatsCollector
 	s.registry = registry
-	s.maxOpen = registry.Gauge("fh.allocated", nil)
-	s.curOpen = registry.Gauge("fh.max", nil)
+	s.maxOpen = registry.Gauge("fh.max", nil)
+	s.curOpen = registry.Gauge("fh.allocated", nil)
 	s.numGoroutines = registry.Gauge("go.numGoroutines", nil)
 
 	ticker := time.NewTicker(30 * time.Second)
