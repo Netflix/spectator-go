@@ -23,9 +23,15 @@ type HttpClient struct {
 	client   *http.Client
 }
 
+type HttpClientOption func(client *http.Client)
+
 // NewHttpClient generates a new *HttpClient, allowing us to specify the timeout on requests.
-func NewHttpClient(registry *Registry, timeout time.Duration) *HttpClient {
-	return &HttpClient{registry, newSingleHostClient(timeout)}
+func NewHttpClient(registry *Registry, timeout time.Duration, opts ...HttpClientOption) *HttpClient {
+	hc := &HttpClient{registry, newSingleHostClient(timeout)}
+	for _, opt := range opts {
+		opt(hc.client)
+	}
+	return hc
 }
 
 func userFriendlyErr(errStr string) string {
@@ -196,7 +202,6 @@ func newSingleHostClient(timeout time.Duration) *http.Client {
 			DialContext: (&net.Dialer{
 				Timeout:   5 * time.Second,
 				KeepAlive: 30 * time.Second,
-				DualStack: true,
 			}).DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          50,
@@ -205,7 +210,6 @@ func newSingleHostClient(timeout time.Duration) *http.Client {
 			IdleConnTimeout:       30 * time.Second,
 			TLSHandshakeTimeout:   2 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
-			// DisableKeepAlives:     true,
 		}},
 	}
 }
