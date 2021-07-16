@@ -77,8 +77,8 @@ func TestHttpClient_PostJson503_Compress(t *testing.T) {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if resp.status != 503 {
-		t.Error("Expected 503 response. Got", resp.status)
+	if resp.Status != 503 {
+		t.Error("Expected 503 response. Got", resp.Status)
 	}
 
 	meters := myMeters(registry)
@@ -162,8 +162,8 @@ func TestHttpClient_PostJsonOk_Compress(t *testing.T) {
 		t.Error("Unexpected error", err)
 	}
 
-	if resp.status != 200 {
-		t.Error("Expected 200 response. Got", resp.status)
+	if resp.Status != 200 {
+		t.Error("Expected 200 response. Got", resp.Status)
 	}
 
 	meters := myMeters(registry)
@@ -227,8 +227,8 @@ func TestHttpClient_PostJsonOk(t *testing.T) {
 		t.Error("Unexpected error", err)
 	}
 
-	if resp.status != 200 {
-		t.Error("Expected 200 response. Got", resp.status)
+	if resp.Status != 200 {
+		t.Error("Expected 200 response. Got", resp.Status)
 	}
 
 	meters := myMeters(registry)
@@ -344,8 +344,8 @@ func TestHttpClient_PostJson503(t *testing.T) {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if resp.status != 503 {
-		t.Error("Expected 503 response. Got", resp.status)
+	if resp.Status != 503 {
+		t.Error("Expected 503 response. Got", resp.Status)
 	}
 
 	meters := myMeters(registry)
