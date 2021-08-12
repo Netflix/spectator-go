@@ -264,13 +264,13 @@ func (r *Registry) sendBatch(measurements []Measurement) {
 		} else {
 			sent := int64(0)
 			dropped := int64(0)
-			if resp.status == 200 {
+			if resp.Status == 200 {
 				sent = numMeasurements
-			} else if resp.status < 500 {
+			} else if resp.Status < 500 {
 				var atlasResponse atlasMessage
-				err = json.Unmarshal(resp.body, &atlasResponse)
+				err = json.Unmarshal(resp.Body, &atlasResponse)
 				if err != nil {
-					r.config.Log.Errorf("%d measurement(s) dropped. Http status: %d", numMeasurements, resp.status)
+					r.config.Log.Errorf("%d measurement(s) dropped. Http status: %d", numMeasurements, resp.Status)
 					r.droppedOther.Add(numMeasurements)
 				} else {
 					dropped = int64(atlasResponse.ErrorCount)

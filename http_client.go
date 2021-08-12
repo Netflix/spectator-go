@@ -23,9 +23,15 @@ type HttpClient struct {
 	client   *http.Client
 }
 
+type HttpClientOption func(client *http.Client)
+
 // NewHttpClient generates a new *HttpClient, allowing us to specify the timeout on requests.
-func NewHttpClient(registry *Registry, timeout time.Duration) *HttpClient {
-	return &HttpClient{registry, newSingleHostClient(timeout)}
+func NewHttpClient(registry *Registry, timeout time.Duration, opts ...HttpClientOption) *HttpClient {
+	hc := &HttpClient{registry, newSingleHostClient(timeout)}
+	for _, opt := range opts {
+		opt(hc.client)
+	}
+	return hc
 }
 
 func userFriendlyErr(errStr string) string {
@@ -102,13 +108,13 @@ const maxAttempts = 3
 
 // HttpResponse represents a read HTTP response.
 type HttpResponse struct {
-	status int
-	body   []byte
+	Status int
+	Body   []byte
 }
 
 func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int) (response HttpResponse, err error) {
 	var willRetry bool
-	response.status = -1
+	response.Status = -1
 	log := h.registry.GetLogger()
 	var req *http.Request
 	var cleanup func()
@@ -149,22 +155,22 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 				log.Errorf("Unable to close body: %v", err)
 			}
 		}()
-		response.status = resp.StatusCode
+		response.Status = resp.StatusCode
 		entry.SetStatusCode(resp.StatusCode)
 		var body []byte
-		response.body, err = ioutil.ReadAll(resp.Body)
+		response.Body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Errorf("Unable to read response body: %v", err)
 			return
 		}
 		log.Debugf("response HTTP %d: %s", resp.StatusCode, body)
-		if response.status >= 200 && response.status < 300 {
+		if response.Status >= 200 && response.Status < 300 {
 			entry.SetSuccess()
 		} else {
 			entry.SetError("http-error")
 		}
 		// only retry 503s for now
-		willRetry = response.status == 503
+		willRetry = response.Status == 503
 	}
 
 	final := !(willRetry && (attemptNumber+1) < maxAttempts)
@@ -178,7 +184,7 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 func (h *HttpClient) PostJson(uri string, jsonBytes []byte) (response HttpResponse, err error) {
 	for attemptNumber := 0; attemptNumber < maxAttempts; attemptNumber += 1 {
 		response, err = h.doHttpPost(uri, jsonBytes, attemptNumber)
-		willRetry := err == nil && response.status == 503
+		willRetry := err == nil && response.Status == 503
 		if !willRetry {
 			break
 		}
@@ -196,7 +202,6 @@ func newSingleHostClient(timeout time.Duration) *http.Client {
 			DialContext: (&net.Dialer{
 				Timeout:   5 * time.Second,
 				KeepAlive: 30 * time.Second,
-				DualStack: true,
 			}).DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          50,
@@ -205,7 +210,6 @@ func newSingleHostClient(timeout time.Duration) *http.Client {
 			IdleConnTimeout:       30 * time.Second,
 			TLSHandshakeTimeout:   2 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
-			// DisableKeepAlives:     true,
 		}},
 	}
 }
