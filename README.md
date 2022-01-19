@@ -12,6 +12,15 @@ This implements a basic [Spectator](https://github.com/Netflix/spectator)
 library for instrumenting golang applications, sending metrics to an Atlas
 aggregator service.
 
+## Debugging Metric Payloads
+
+Set the following environment variable to enumerate the metrics payloads which
+are sent to the backend. This is useful for debugging metric publishing issues.
+
+```
+export SPECTATOR_DEBUG_PAYLOAD=1
+```
+
 ## Instrumenting Code
 
 ```go
@@ -96,7 +105,6 @@ func main() {
 		server.Handle(req)
 	}
 }
-
 ```
 
 

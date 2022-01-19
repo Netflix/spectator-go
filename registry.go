@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -48,6 +49,7 @@ type Registry struct {
 	config         *Config
 	meters         map[string]Meter
 	started        bool
+	debugPayload   bool
 	mutex          *sync.Mutex
 	http           *HttpClient
 	sentMetrics    *Counter
@@ -113,6 +115,7 @@ func NewRegistry(config *Config) *Registry {
 		&SystemClock{}, config,
 		map[string]Meter{},
 		false,
+		debugPayload(),
 		&sync.Mutex{}, nil, nil, nil, nil, nil,
 		make(chan struct{}),
 		semaphore.NewWeighted(config.PublishWorkers),
@@ -207,6 +210,15 @@ func (r *Registry) Stop() {
 	r.publish()
 }
 
+func debugPayload() bool {
+	if value, ok := os.LookupEnv("SPECTATOR_DEBUG_PAYLOAD"); ok {
+		if value == "1" {
+			return true
+		}
+	}
+	return false
+}
+
 func shouldSendMeasurement(measurement Measurement) bool {
 	v := measurement.value
 	if math.IsNaN(v) {
@@ -252,6 +264,11 @@ func getUnique(messages []string) string {
 func (r *Registry) sendBatch(measurements []Measurement) {
 	numMeasurements := int64(len(measurements))
 	r.config.Log.Debugf("Sending %d measurements to %s", len(measurements), r.config.Uri)
+	if r.debugPayload {
+		for _, m := range measurements {
+			r.config.Log.Debugf("reporting: %s", m.String())
+		}
+	}
 	jsonBytes, err := r.measurementsToJson(measurements)
 	if err != nil {
 		r.droppedOther.Add(numMeasurements)
