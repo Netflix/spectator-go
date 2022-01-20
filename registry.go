@@ -179,6 +179,8 @@ func (r *Registry) Start() error {
 		err := "registry has already started. Ignoring Start request"
 		r.config.Log.Infof(err)
 		return fmt.Errorf(err)
+	} else {
+		r.config.Log.Infof("registry starting with config: %s", r.config)
 	}
 
 	r.started = true
