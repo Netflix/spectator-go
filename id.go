@@ -11,6 +11,7 @@ import (
 type Id struct {
 	name string
 	tags map[string]string
+	includeNode bool
 	// keyOnce protects access to key, allowing it to be computed on demand
 	// without racing other readers.
 	keyOnce sync.Once
@@ -85,6 +86,7 @@ func NewId(name string, tags map[string]string) *Id {
 	return &Id{
 		name: name,
 		tags: myTags,
+		includeNode: true,
 	}
 }
 
@@ -120,8 +122,15 @@ func (id *Id) WithDefaultStat(stat string) *Id {
 	}
 }
 
+// WithoutNode configures the Id so that the nf.node common tag is not added to
+// the metric when it is published to the backend.
+func (id *Id) WithoutNode() *Id {
+	id.includeNode = false
+	return id
+}
+
 func (id *Id) String() string {
-	return fmt.Sprintf("Id{name=%s,tags=%v}", id.name, id.tags)
+	return fmt.Sprintf("Id{name=%s,tags=%v,includeNode=%v}", id.name, id.tags, id.includeNode)
 }
 
 // Name exposes the internal metric name field.

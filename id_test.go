@@ -100,6 +100,7 @@ func TestId_WithTags(t *testing.T) {
 	id1 := NewId("c", map[string]string{"statistic": "baz", "a": "b"})
 	id2 := id1.WithTags(map[string]string{"statistic": "foo", "k": "v"})
 	expected := map[string]string{"statistic": "foo", "k": "v", "a": "b"}
+
 	if id2.Name() != "c" {
 		t.Errorf("WithTags must copy the name. Got %s instead of c", id2.Name())
 	}
@@ -107,12 +108,29 @@ func TestId_WithTags(t *testing.T) {
 	if !reflect.DeepEqual(expected, id2.Tags()) {
 		t.Errorf("Expected %v, got %v tags", expected, id2.Tags())
 	}
+
+	if id2.String() != "Id{name=c,tags=map[a:b k:v statistic:foo],includeNode=true}" {
+		t.Errorf("Got %s", id2.String())
+	}
+}
+
+func TestId_WithoutNode(t *testing.T) {
+	id := NewId("c", map[string]string{"statistic": "baz", "a": "b"}).WithoutNode()
+	expected := map[string]string{"statistic": "baz", "a": "b"}
+
+	if !reflect.DeepEqual(expected, id.Tags()) {
+		t.Errorf("Expected %v, got %v tags", expected, id.Tags())
+	}
+
+	if id.includeNode {
+		t.Errorf("Got includeNode=%v", id.includeNode)
+	}
 }
 
 func TestId_WithStat(t *testing.T) {
 	id1 := NewId("c", nil)
 	id2 := id1.WithStat("stuff")
-	if id2.String() != "Id{name=c,tags=map[statistic:stuff]}" {
+	if id2.String() != "Id{name=c,tags=map[statistic:stuff],includeNode=true}" {
 		t.Errorf("Got %s", id2.String())
 	}
 }

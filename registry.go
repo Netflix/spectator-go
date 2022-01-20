@@ -399,6 +399,9 @@ func (r *Registry) appendMeasurement(payload *[]interface{}, strings map[string]
 	commonTags := r.config.CommonTags
 	*payload = append(*payload, len(m.id.tags)+1+len(commonTags))
 	for k, v := range commonTags {
+		if k == "nf.node" && !m.id.includeNode {
+			continue
+		}
 		*payload = append(*payload, strings[k])
 		*payload = append(*payload, strings[v])
 	}
