@@ -107,4 +107,18 @@ func main() {
 }
 ```
 
+## Known Issues
 
+### Unable to close body: context canceled
+
+If you see the following two error messages repeated in your application logs, then you are running
+version 1.16.10 or 1.17.3 of Golang which introduced a regression ([Issue#49366]). See [PR#59] in
+this project for related discussion.
+
+```
+level=error msg="Could not POST measurements: HTTP 200 context canceled"
+level=error msg="Unable to close body: context canceled"
+```
+
+[Issue#49366]: https://github.com/golang/go/issues/49366
+[PR#59]: https://github.com/Netflix/spectator-go/pull/59
