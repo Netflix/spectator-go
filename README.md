@@ -12,15 +12,6 @@ This implements a basic [Spectator](https://github.com/Netflix/spectator)
 library for instrumenting golang applications, sending metrics to an Atlas
 aggregator service.
 
-## Debugging Metric Payloads
-
-Set the following environment variable to enumerate the metrics payloads which
-are sent to the backend. This is useful for debugging metric publishing issues.
-
-```
-export SPECTATOR_DEBUG_PAYLOAD=1
-```
-
 ## Instrumenting Code
 
 ```go
@@ -89,7 +80,7 @@ func main() {
 		Uri: "http://example.org/api/v1/publish", CommonTags: commonTags}
 	registry := spectator.NewRegistry(config)
 
-	// optionally set custom logger (needs to implement Debugf, Infof, Errorf)
+	// optionally set custom logger (it must implement Debugf, Infof, Errorf)
 	// registry.SetLogger(logger)
 	registry.Start()
 	defer registry.Stop()
@@ -105,6 +96,29 @@ func main() {
 		server.Handle(req)
 	}
 }
+```
+
+## Logging
+
+Logging is implemented with the standard Golang [log package](https://pkg.go.dev/log). The logger
+defines interfaces for [Debugf, Infof, and Errorf](./logger.go#L10-L14) which means that under
+normal operation, you will see log messages for all of these levels. There are
+[useful messages](https://github.com/Netflix/spectator-go/blob/master/registry.go#L268-L273)
+implemented at the Debug level which can help diagnose the metric publishing workflow. If you do
+not see any of these messages, then it is an indication that the Regisry may not be started.
+
+If you do not wish to see debug log messages from spectator-go, then you should configure a custom
+logger which implements the Logger interface. A library such as [Zap](https://github.com/uber-go/zap)
+can provide this functionality, which will then allow for log level control at the command line
+with the `--log-level=debug` flag.
+
+## Debugging Metric Payloads
+
+Set the following environment variable to enumerate the metrics payloads which
+are sent to the backend. This is useful for debugging metric publishing issues.
+
+```
+export SPECTATOR_DEBUG_PAYLOAD=1
 ```
 
 ## Known Issues
