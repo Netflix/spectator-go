@@ -105,7 +105,7 @@ defines interfaces for [Debugf, Infof, and Errorf](./logger.go#L10-L14) which me
 normal operation, you will see log messages for all of these levels. There are
 [useful messages](https://github.com/Netflix/spectator-go/blob/master/registry.go#L268-L273)
 implemented at the Debug level which can help diagnose the metric publishing workflow. If you do
-not see any of these messages, then it is an indication that the Regisry may not be started.
+not see any of these messages, then it is an indication that the Registry may not be started.
 
 If you do not wish to see debug log messages from spectator-go, then you should configure a custom
 logger which implements the Logger interface. A library such as [Zap](https://github.com/uber-go/zap)
