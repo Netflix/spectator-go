@@ -190,6 +190,74 @@ func TestHttpClient_PostJsonOk_Compress(t *testing.T) {
 	assertTimer(t, gotMeter.(*Timer), 1, 1000, 1000*1000.0, 1000)
 }
 
+func TestHttpClient_PostJsonOk_NoCompress(t *testing.T) {
+	var log Logger
+	const StartTime = 1
+	clock := &ManualClock{StartTime}
+	expectedBody := String(640)
+	publishHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error("Unable to read body", err)
+		}
+		bodyStr := string(body)
+		if bodyStr != expectedBody {
+			t.Error("Unexpected body in request:", bodyStr)
+		}
+		_, _ = w.Write(okMsg)
+
+		if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
+			t.Errorf("Unexpected content-type: %s", contentType)
+		}
+		if contentEncoding := r.Header.Get("Content-Encoding"); contentEncoding != "" {
+			t.Errorf("Unexpected content-encoding: %s", contentEncoding)
+		}
+		clock.SetNanos(StartTime + 1000)
+	})
+
+	server := httptest.NewServer(publishHandler)
+	defer server.Close()
+
+	serverUrl := server.URL
+
+	config := makeConfig(serverUrl)
+	registry := NewRegistryWithClock(config, clock)
+	log = registry.GetLogger()
+	client := NewHttpClient(registry, 100*time.Millisecond, WithCompressThreshold(0))
+
+	resp, err := client.PostJson(config.Uri, []byte(expectedBody))
+	if err != nil {
+		t.Error("Unexpected error", err)
+	}
+
+	if resp.Status != 200 {
+		t.Error("Expected 200 response. Got", resp.Status)
+	}
+
+	meters := myMeters(registry)
+	if len(meters) != 1 {
+		t.Fatal("Expected 1 meter, got", len(meters))
+	}
+
+	expectedTags := map[string]string{
+		"owner":             "spectator-go",
+		"http.method":       "POST",
+		"http.status":       "200",
+		"ipc.attempt":       "initial",
+		"ipc.attempt.final": "true",
+		"ipc.endpoint":      "/",
+		"ipc.result":        "success",
+		"ipc.status":        "success",
+	}
+	expectedId := NewId("ipc.client.call", expectedTags)
+	gotMeter := meters[0]
+	if expectedId.name != gotMeter.MeterId().name || !reflect.DeepEqual(expectedTags, gotMeter.MeterId().tags) {
+		log.Errorf("Unexpected meter registered. Expecting %v. Got %v", expectedId, gotMeter.MeterId())
+	}
+
+	assertTimer(t, gotMeter.(*Timer), 1, 1000, 1000*1000.0, 1000)
+}
+
 func TestHttpClient_PostJsonOk(t *testing.T) {
 	var log Logger
 	const StartTime = 1
