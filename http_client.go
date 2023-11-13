@@ -19,19 +19,32 @@ import (
 
 // HttpClient represents a spectator HTTP client.
 type HttpClient struct {
-	registry *Registry
-	client   *http.Client
+	Client            *http.Client
+	registry          *Registry
+	compressThreshold int
 }
 
-type HttpClientOption func(client *http.Client)
+type HttpClientOption func(client *HttpClient)
 
 // NewHttpClient generates a new *HttpClient, allowing us to specify the timeout on requests.
 func NewHttpClient(registry *Registry, timeout time.Duration, opts ...HttpClientOption) *HttpClient {
-	hc := &HttpClient{registry, newSingleHostClient(timeout)}
+	hc := &HttpClient{
+		registry:          registry,
+		Client:            newSingleHostClient(timeout),
+		compressThreshold: 512,
+	}
 	for _, opt := range opts {
-		opt(hc.client)
+		opt(hc)
 	}
 	return hc
+}
+
+// WithCompressThreshold is an HttpClientOption that specifies the size
+// threshold for compressing payloads. A value of 0 disables compression.
+func WithCompressThreshold(threshold int) HttpClientOption {
+	return func(hc *HttpClient) {
+		hc.compressThreshold = threshold
+	}
 }
 
 func userFriendlyErr(errStr string) string {
@@ -55,11 +68,10 @@ var gzipWriterPool = &sync.Pool{
 }
 
 const jsonType = "application/json"
-const compressThreshold = 512
 
 func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, func(), error) {
 	log := h.registry.GetLogger()
-	compressed := len(jsonBytes) > compressThreshold
+	compressed := h.compressThreshold != 0 && len(jsonBytes) > h.compressThreshold
 	payloadBuffer := payloadPool.Get().(*bytes.Buffer)
 	var g *gzip.Writer
 	if compressed {
@@ -126,9 +138,9 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
 	defer func() {
 		cleanup()
-		h.client.CloseIdleConnections()
+		h.Client.CloseIdleConnections()
 	}()
-	resp, err := h.client.Do(req)
+	resp, err := h.Client.Do(req)
 	if err != nil {
 		var status string
 		if urlErr, ok := err.(*url.Error); ok {
