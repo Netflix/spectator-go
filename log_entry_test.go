@@ -42,6 +42,11 @@ func TestLogEntry_Log(t *testing.T) {
 		"ipc.client.call|totalOfSquares": 0.25,
 		"ipc.client.call|max":            0.5,
 		"ipc.client.call|count":          1,
+
+		"spectator.registrySize|count":          1,
+		"spectator.registrySize|max":            6,
+		"spectator.registrySize|totalAmount":    6,
+		"spectator.registrySize|totalOfSquares": 36,
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("Expected %v\nGot %v", expected, actual)
@@ -72,6 +77,11 @@ func TestLogEntry_LogCustom(t *testing.T) {
 		"ipc.client.call|max":              0.5,
 		"ipc.client.call|count":            1,
 		"ipc.client.call|percentile|T007D": 1,
+
+		"spectator.registrySize|count":          1,
+		"spectator.registrySize|max":            7,
+		"spectator.registrySize|totalAmount":    7,
+		"spectator.registrySize|totalOfSquares": 49,
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("Expected %v\nGot %v", expected, actual)

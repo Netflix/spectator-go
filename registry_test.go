@@ -33,6 +33,7 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 		t.Fatal("Unable to get a registry", err)
 	}
 
+	logger := defaultLogger()
 	expectedConfig := Config{
 		5 * time.Second,
 		1 * time.Second,
@@ -40,15 +41,16 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 		10000,
 		map[string]string{"nf.app": "app", "nf.account": "1234"},
 		1,
-		defaultLogger(),
+		logger,
 		nil,
 		nil,
 	}
 	cfg := r.config
+	cfg.Log = logger
 	cfg.IsEnabled = nil
 	cfg.IpcTimerRecord = nil
 	if !reflect.DeepEqual(&expectedConfig, cfg) {
-		t.Errorf("Expected config %v, got %v", expectedConfig, cfg)
+		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
 	}
 }
 
@@ -171,7 +173,14 @@ func TestRegistry_publish(t *testing.T) {
 			10.0}
 
 		expectedEntries := payloadToEntries(t, expected)
-		payloadEntries := payloadToEntries(t, payload)
+		allPayloadEntries := payloadToEntries(t, payload)
+		var payloadEntries []payloadEntry
+		for _, entry := range allPayloadEntries {
+			// n.b. remove the spectator.registrySize meta meters
+			if entry.tags["name"] != "spectator.registrySize" {
+				payloadEntries = append(payloadEntries, entry)
+			}
+		}
 
 		if !reflect.DeepEqual(expectedEntries, payloadEntries) {
 			t.Errorf("Expected payload:\n %v\ngot:\n %v", expectedEntries, payloadEntries)
@@ -195,7 +204,7 @@ func TestRegistry_publish(t *testing.T) {
 	r.publish()
 
 	ms := measurementsToMap(r.Measurements())
-	if ms["spectator.measurements|count|sent"] != 1 {
+	if ms["spectator.measurements|count|sent"]-4 != 1 { // exclude spectator.registrySize from the count
 		t.Errorf("Expecting one measurement sent, got %f", ms["spectator.measurements|count|sent"])
 	}
 }
@@ -246,7 +255,7 @@ func TestRegistry_publish_errors(t *testing.T) {
 			}
 		}
 	}
-	if sent != 2 {
+	if sent-4 != 2 { // exclude spectator.registrySize from the count
 		t.Errorf("Expecting 2 measurements sent, got %f", sent)
 	}
 	if validationErrors != 1 {
