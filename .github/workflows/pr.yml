@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         run: |
-          go test -v
+          go test -race -v ./...
           golangci-lint run
 
       - name: Run linter
