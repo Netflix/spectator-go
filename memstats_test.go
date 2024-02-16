@@ -90,9 +90,11 @@ func TestUpdateMemStats(t *testing.T) {
 	}
 	for _, m := range ms {
 		name := m.MeterId().name
-		if name == "gc.pauseTime" {
+		switch name {
+		case "gc.pauseTime":
 			assertTimer(t, m.(*Timer), 1, 10*1e6, 100*1e12, 10*1e6)
-		} else {
+		case "spectator.registrySize":
+		default:
 			expected := expectedValues[name]
 			measures := m.Measure()
 			if expected > 0 {

@@ -56,6 +56,7 @@ type Registry struct {
 	invalidMetrics *Counter
 	droppedHttp    *Counter
 	droppedOther   *Counter
+	registrySize   *DistributionSummary
 	quit           chan struct{}
 	publishSync    *semaphore.Weighted
 }
@@ -116,7 +117,7 @@ func NewRegistry(config *Config) *Registry {
 		map[string]Meter{},
 		false,
 		debugPayload(),
-		&sync.Mutex{}, nil, nil, nil, nil, nil,
+		&sync.Mutex{}, nil, nil, nil, nil, nil, nil,
 		make(chan struct{}),
 		semaphore.NewWeighted(config.PublishWorkers),
 	}
@@ -129,6 +130,8 @@ func NewRegistry(config *Config) *Registry {
 		map[string]string{"id": "dropped", "error": "http-error"})
 	r.droppedOther = r.Counter("spectator.measurements",
 		map[string]string{"id": "dropped", "error": "other"})
+	r.registrySize = r.DistributionSummary("spectator.registrySize",
+		nil)
 
 	return r
 }
@@ -156,6 +159,13 @@ func (r *Registry) Meters() []Meter {
 		meters = append(meters, m)
 	}
 	return meters
+}
+
+// Count returns the number of meters in the registry
+func (r *Registry) Count() int {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return len(r.meters)
 }
 
 // Clock returns the internal clock.
@@ -235,6 +245,8 @@ func (r *Registry) Measurements() []Measurement {
 	var measurements []Measurement
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
+	r.registrySize.Record(int64(len(r.meters)))
 	for _, meter := range r.meters {
 		for _, measure := range meter.Measure() {
 			if shouldSendMeasurement(measure) {
