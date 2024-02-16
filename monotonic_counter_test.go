@@ -44,3 +44,15 @@ func TestMonotonicCounterStartingAt0(t *testing.T) {
 		t.Errorf("Count should be 1, got %f", c.counter.Count())
 	}
 }
+
+func TestMonotonicCounterThreadSafety(t *testing.T) {
+	r := NewRegistry(makeConfig("http://example.org"))
+	c := NewMonotonicCounter(r, "mono", nil)
+
+	go func() {
+		c.Set(0)
+	}()
+	go func() {
+		c.Set(0)
+	}()
+}
