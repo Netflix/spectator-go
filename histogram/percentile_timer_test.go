@@ -2,11 +2,12 @@ package histogram
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go"
 	"math"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/Netflix/spectator-go"
 )
 
 func makeConfig(uri string) *spectator.Config {
@@ -95,6 +96,18 @@ func measurementsToMap(ms []spectator.Measurement) map[string]float64 {
 	return result
 }
 
+func filterRegistrySize(ms []spectator.Measurement) []spectator.Measurement {
+	var filtered []spectator.Measurement
+	for _, m := range ms {
+		if m.Id().Name() == "spectator.registrySize" {
+			continue
+		}
+
+		filtered = append(filtered, m)
+	}
+	return filtered
+}
+
 func TestPercentileTimer_Measurements(t *testing.T) {
 	r := spectator.NewRegistry(config)
 	t1 := NewPercentileTimer(r, "test", map[string]string{})
@@ -102,7 +115,7 @@ func TestPercentileTimer_Measurements(t *testing.T) {
 	t1.Record(2 * time.Second)
 	t1.Record(40 * time.Second)
 
-	ms := r.Measurements()
+	ms := filterRegistrySize(r.Measurements())
 	ms_map := measurementsToMap(ms)
 	var expected = make(map[string]float64)
 	expected["test|max"] = 40
@@ -120,7 +133,7 @@ func TestPercentileTimer_Measurements(t *testing.T) {
 	t1.Record(40 * time.Second)
 	t1.Record(140 * time.Second)
 	t1.Record(240 * time.Second)
-	ms = r.Measurements()
+	ms = filterRegistrySize(r.Measurements())
 	ms_map = measurementsToMap(ms)
 	expected["test|max"] = 240
 	expected["test|count"] = 4

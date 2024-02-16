@@ -1,10 +1,11 @@
 package histogram
 
 import (
-	"github.com/Netflix/spectator-go"
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/Netflix/spectator-go"
 )
 
 func TestPercentileDistributionSummary_Basic(t *testing.T) {
@@ -16,7 +17,7 @@ func TestPercentileDistributionSummary_Basic(t *testing.T) {
 	ds.Record(3000) // 0x2F
 	ds.Record(3001) // 0x2F
 
-	ms := r.Measurements()
+	ms := filterRegistrySize(r.Measurements())
 	measurementMap := measurementsToMap(ms)
 	var expected = make(map[string]float64)
 	expected["ds|count"] = 4

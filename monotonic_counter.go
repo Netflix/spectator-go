@@ -1,6 +1,9 @@
 package spectator
 
-import "sync/atomic"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // MonotonicCounter is used track a monotonically increasing counter.
 //
@@ -8,12 +11,13 @@ import "sync/atomic"
 //
 // https://netflix.github.io/spectator/en/latest/intro/gauge/#monotonic-counters
 type MonotonicCounter struct {
-	value    int64
+	value int64
 	// Pointers need to be after counters to ensure 64-bit alignment. See
 	// note in atomicnum.go
-	registry *Registry
-	id       *Id
-	counter  *Counter
+	registry    *Registry
+	id          *Id
+	counter     *Counter
+	counterOnce sync.Once
 }
 
 // NewMonotonicCounter generates a new monotonic counter, taking the registry so
@@ -26,20 +30,28 @@ func NewMonotonicCounter(registry *Registry, name string, tags map[string]string
 // NewMonotonicCounterWithId generates a new monotonic counter, using the
 // provided meter identifier.
 func NewMonotonicCounterWithId(registry *Registry, id *Id) *MonotonicCounter {
-	return &MonotonicCounter{0, registry, id, nil}
+	return &MonotonicCounter{
+		registry: registry,
+		id:       id,
+	}
 }
 
 // Set adds amount to the current counter.
 func (c *MonotonicCounter) Set(amount int64) {
-	if c.counter == nil {
+	var uninitialized bool
+	c.counterOnce.Do(func() {
 		c.counter = c.registry.CounterWithId(c.id)
-	} else {
+		uninitialized = true
+	})
+
+	if !uninitialized {
 		prev := atomic.LoadInt64(&c.value)
 		delta := amount - prev
 		if delta >= 0 {
 			c.counter.Add(delta)
 		}
 	}
+
 	atomic.StoreInt64(&c.value, amount)
 }
 
