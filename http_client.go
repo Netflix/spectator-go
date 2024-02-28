@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/gzip"
-
 	"github.com/pkg/errors"
 )
 
@@ -70,29 +69,23 @@ var gzipWriterPool = &sync.Pool{
 const jsonType = "application/json"
 
 func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.Request, func(), error) {
-	log := h.registry.GetLogger()
 	compressed := h.compressThreshold != 0 && len(jsonBytes) > h.compressThreshold
 	payloadBuffer := payloadPool.Get().(*bytes.Buffer)
+	defer func() {
+		payloadBuffer.Reset()
+		payloadPool.Put(payloadBuffer)
+	}()
 	var g *gzip.Writer
 	if compressed {
 		g = gzipWriterPool.Get().(*gzip.Writer)
+		defer gzipWriterPool.Put(g)
 		g.Reset(payloadBuffer)
-		defer func() {
-			if err := g.Close(); err != nil {
-				log.Debugf("closing gzip writer, best effort: %v", err)
-			}
-			gzipWriterPool.Put(g)
-		}()
-
+		defer g.Close()
 		if _, err := g.Write(jsonBytes); err != nil {
 			return nil, func() {}, errors.Wrap(err, "Unable to compress json payload")
 		}
 		if err := g.Flush(); err != nil {
 			return nil, func() {}, errors.Wrap(err, "Unable to flush gzip stream")
-		}
-
-		if err := g.Close(); err != nil {
-			return nil, func() {}, errors.Wrap(err, "Unable to close gzip stream")
 		}
 	} else {
 		if _, err := payloadBuffer.Write(jsonBytes); err != nil {
@@ -110,10 +103,7 @@ func (h *HttpClient) createPayloadRequest(uri string, jsonBytes []byte) (*http.R
 	if compressed {
 		req.Header.Set("Content-Encoding", "gzip")
 	}
-	return req, func() {
-		payloadBuffer.Reset()
-		payloadPool.Put(payloadBuffer)
-	}, nil
+	return req, func() {}, nil
 }
 
 const maxAttempts = 3
@@ -129,20 +119,16 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 	response.Status = -1
 	log := h.registry.GetLogger()
 	var req *http.Request
-	var cleanup func()
-	req, cleanup, err = h.createPayloadRequest(uri, jsonBytes)
+	req, _, err = h.createPayloadRequest(uri, jsonBytes)
 	if err != nil {
-		panic(err)
+		return HttpResponse{}, err
 	}
 	entry := NewLogEntry(h.registry, "POST", uri)
 	log.Debugf("posting data to %s, payload %d bytes", uri, len(jsonBytes))
-	defer func() {
-		cleanup()
-		h.Client.CloseIdleConnections()
-	}()
+	defer h.Client.CloseIdleConnections()
 	resp, err := h.Client.Do(req)
 	if err != nil {
-		var status string
+		status := "HttpErr"
 		if urlErr, ok := err.(*url.Error); ok {
 			if urlErr.Timeout() {
 				status = "timeout"
@@ -151,8 +137,6 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 			} else {
 				status = userFriendlyErr(urlErr.Err.Error())
 			}
-		} else {
-			status = err.Error()
 		}
 		entry.SetError(status)
 		willRetry = false
@@ -162,20 +146,15 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 			log.Infof("Unable to POST to %s: %v", uri, err)
 		}
 	} else {
-		defer func() {
-			if err = resp.Body.Close(); err != nil {
-				log.Errorf("Unable to close body: %v", err)
-			}
-		}()
+		defer resp.Body.Close()
 		response.Status = resp.StatusCode
 		entry.SetStatusCode(resp.StatusCode)
-		var body []byte
 		response.Body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Errorf("Unable to read response body: %v", err)
 			return
 		}
-		log.Debugf("response HTTP %d: %s", resp.StatusCode, body)
+		log.Debugf("response HTTP %d: %s", resp.StatusCode, response.Body)
 		if response.Status >= 200 && response.Status < 300 {
 			entry.SetSuccess()
 		} else {
