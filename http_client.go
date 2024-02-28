@@ -162,11 +162,7 @@ func (h *HttpClient) doHttpPost(uri string, jsonBytes []byte, attemptNumber int)
 			log.Infof("Unable to POST to %s: %v", uri, err)
 		}
 	} else {
-		defer func() {
-			if err = resp.Body.Close(); err != nil {
-				log.Errorf("Unable to close body: %v", err)
-			}
-		}()
+		defer resp.Body.Close()
 		response.Status = resp.StatusCode
 		entry.SetStatusCode(resp.StatusCode)
 		var body []byte
