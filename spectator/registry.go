@@ -60,8 +60,6 @@ type Registry struct {
 	quit   chan struct{}
 }
 
-// TODO The New* methods will remain as is. Only the Registry instantiated should be changed.
-
 // NewRegistryConfiguredBy loads a new Config JSON file from disk at the path specified.
 func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 	path := filepath.Clean(filePath)
@@ -90,6 +88,13 @@ func NewRegistry(config *Config) *Registry {
 	if config.Log == nil {
 		config.Log = defaultLogger()
 	}
+
+	mergedTags := tagsFromEnvVars()
+	// merge env var tags with config tags
+	for k, v := range config.CommonTags {
+		mergedTags[k] = v
+	}
+	config.CommonTags = mergedTags
 
 	printWriter := &writer.PrintWriter{}
 	r := &Registry{
