@@ -40,9 +40,8 @@ func TestPercentileDistributionSummary_RecordNegative(t *testing.T) {
 	ds := NewPercentileDistributionSummary(id, &w)
 	ds.Record(-100)
 
-	expected := "D:recordPercentileNegative:-100"
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
+	if len(w.Lines) != 0 {
+		t.Errorf("Expected no lines to be written, got %d", len(w.Lines))
 	}
 }
 

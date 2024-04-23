@@ -24,6 +24,8 @@ func NewPercentileDistributionSummary(id *Id, writer writer.Writer) *PercentileD
 
 // Record records a new value to track within the distribution.
 func (p *PercentileDistributionSummary) Record(amount int64) {
-	var line = fmt.Sprintf("%c:%s:%d", p.meterTypeSymbol, p.id.spectatordId, amount)
-	p.writer.Write(line)
+	if amount >= 0 {
+		var line = fmt.Sprintf("%c:%s:%d", p.meterTypeSymbol, p.id.spectatordId, amount)
+		p.writer.Write(line)
+	}
 }
