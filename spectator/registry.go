@@ -192,27 +192,3 @@ func (r *Registry) Stop() {
 	// TODO implement
 	close(r.quit)
 }
-
-// TODO do we need this?
-//func shouldSendMeasurement(measurement Measurement) bool {
-//	v := measurement.value
-//	if math.IsNaN(v) {
-//		return false
-//	}
-//	isGauge := opFromTags(measurement.id.tags) == maxOp
-//	return isGauge || v >= 0
-//}
-//
-//const (
-//	addOp = 0
-//	maxOp = 10
-//)
-//
-//func opFromTags(tags map[string]string) int {
-//	switch tags["statistic"] {
-//	case "count", "totalAmount", "totalTime", "totalOfSquares", "percentile":
-//		return addOp
-//	default:
-//		return maxOp
-//	}
-//}
