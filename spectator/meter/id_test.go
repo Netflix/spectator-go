@@ -1,4 +1,4 @@
-package spectator
+package meter
 
 import (
 	"bytes"
