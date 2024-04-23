@@ -116,17 +116,21 @@ func (r *Registry) NewMeter(id *meter.Id, meterFactory MeterFactoryFun) Meter {
 	return meterFactory()
 }
 
-// NewId calls spectator.NewId().
+// NewId calls meters.NewId() and adds the CommonTags registered in the config.
 func (r *Registry) NewId(name string, tags map[string]string) *meter.Id {
-	return meter.NewId(name, tags)
-}
+	newId := meter.NewId(name, tags)
 
-// TODO append common tags upon creation
+	if r.config.CommonTags != nil && len(r.config.CommonTags) > 0 {
+		newId = newId.WithTags(r.config.CommonTags)
+	}
+
+	return newId
+}
 
 // Counter calls NewId() with the name and tags, and then calls r.CounterWithId()
 // using that *Id.
 func (r *Registry) Counter(name string, tags map[string]string) *meter.Counter {
-	return meter.NewCounter(meter.NewId(name, tags), r.writer)
+	return meter.NewCounter(r.NewId(name, tags), r.writer)
 }
 
 func (r *Registry) CounterWithId(id *meter.Id) *meter.Counter {
@@ -135,7 +139,7 @@ func (r *Registry) CounterWithId(id *meter.Id) *meter.Counter {
 
 // Timer calls NewId() with the name and tags, and then calls r.TimerWithId() using that *Id.
 func (r *Registry) Timer(name string, tags map[string]string) *meter.Timer {
-	return meter.NewTimer(meter.NewId(name, tags), r.writer)
+	return meter.NewTimer(r.NewId(name, tags), r.writer)
 }
 
 // TimerWithId returns a new *Timer, using the provided meter identifier.
@@ -144,7 +148,7 @@ func (r *Registry) TimerWithId(id *meter.Id) *meter.Timer {
 }
 
 func (r *Registry) Gauge(name string, tags map[string]string) *meter.Gauge {
-	return meter.NewGauge(meter.NewId(name, tags), r.writer)
+	return meter.NewGauge(r.NewId(name, tags), r.writer)
 }
 
 func (r *Registry) GaugeWithId(id *meter.Id) *meter.Gauge {
@@ -152,7 +156,7 @@ func (r *Registry) GaugeWithId(id *meter.Id) *meter.Gauge {
 }
 
 func (r *Registry) MaxGauge(name string, tags map[string]string) *meter.MaxGauge {
-	return meter.NewMaxGauge(meter.NewId(name, tags), r.writer)
+	return meter.NewMaxGauge(r.NewId(name, tags), r.writer)
 }
 
 func (r *Registry) MaxGaugeWithId(id *meter.Id) *meter.MaxGauge {
@@ -160,7 +164,7 @@ func (r *Registry) MaxGaugeWithId(id *meter.Id) *meter.MaxGauge {
 }
 
 func (r *Registry) DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary {
-	return meter.NewDistributionSummary(meter.NewId(name, tags), r.writer)
+	return meter.NewDistributionSummary(r.NewId(name, tags), r.writer)
 }
 
 func (r *Registry) DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary {
@@ -168,7 +172,7 @@ func (r *Registry) DistributionSummaryWithId(id *meter.Id) *meter.DistributionSu
 }
 
 func (r *Registry) PercentileDistributionSummary(name string, tags map[string]string) *meter.PercentileDistributionSummary {
-	return meter.NewPercentileDistributionSummary(meter.NewId(name, tags), r.writer)
+	return meter.NewPercentileDistributionSummary(r.NewId(name, tags), r.writer)
 }
 
 func (r *Registry) PercentileDistributionSummaryWithId(id *meter.Id) *meter.PercentileDistributionSummary {
@@ -176,7 +180,7 @@ func (r *Registry) PercentileDistributionSummaryWithId(id *meter.Id) *meter.Perc
 }
 
 func (r *Registry) PercentileTimer(name string, tags map[string]string) *meter.PercentileTimer {
-	return meter.NewPercentileTimer(meter.NewId(name, tags), r.writer)
+	return meter.NewPercentileTimer(r.NewId(name, tags), r.writer)
 }
 
 func (r *Registry) PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer {
