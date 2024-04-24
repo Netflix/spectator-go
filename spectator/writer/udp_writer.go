@@ -21,7 +21,7 @@ func NewUdpWriter(address string, logger logger.Logger) (*UdpWriter, error) {
 		return nil, err
 	}
 
-	logger.Debugf("Initializing UdpWriter with address: %s", conn.RemoteAddr())
+	logger.Infof("Initializing UdpWriter with address: %s", conn.RemoteAddr())
 
 	return &UdpWriter{conn, logger}, nil
 }

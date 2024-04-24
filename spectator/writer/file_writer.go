@@ -25,7 +25,10 @@ func NewFileWriter(filename string, logger logger.Logger) (*FileWriter, error) {
 func (f *FileWriter) Write(line string) {
 	f.logger.Debugf("Sending line: %s", line)
 
-	_, _ = fmt.Fprintln(f.file, line)
+	_, err := fmt.Fprintln(f.file, line)
+	if err != nil {
+		f.logger.Errorf("Error writing to file: %s", err)
+	}
 }
 
 // Close closes the file.

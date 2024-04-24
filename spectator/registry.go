@@ -93,14 +93,16 @@ func NewRegistry(config *Config) (*Registry, error) {
 	}
 	config.CommonTags = mergedTags
 
-	udpWriter, err := writer.NewWriter(config.GetLocation(), config.Log)
+	newWriter, err := writer.NewWriter(config.GetLocation(), config.Log)
 	if err != nil {
 		return nil, err
 	}
 
+	config.Log.Infof("Using writer: %T", newWriter)
+
 	r := &Registry{
 		config: config,
-		writer: udpWriter,
+		writer: newWriter,
 		quit:   make(chan struct{}),
 	}
 
