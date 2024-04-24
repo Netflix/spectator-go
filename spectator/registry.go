@@ -80,9 +80,6 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 
 // NewRegistry generates a new registry from the config.
 //
-// If config.IsEnabled is unset, it defaults to an implementation that returns
-// true.
-//
 // If config.Log is unset, it defaults to using the default logger.
 func NewRegistry(config *Config) (*Registry, error) {
 	if config.Log == nil {
