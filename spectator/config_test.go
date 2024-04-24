@@ -61,7 +61,43 @@ func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 	if !reflect.DeepEqual(&expectedConfig, cfg) {
 		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
 	}
+}
 
+// Test passed in values wins over env variables
+func TestConfigMergesCommonTagsWithEnvVariablesAndPassedInValues(t *testing.T) {
+	_ = os.Setenv("TITUS_CONTAINER_NAME", "container_name_via_env")
+	_ = os.Setenv("NETFLIX_PROCESS_NAME", "process_name_by_env")
+	defer os.Unsetenv("TITUS_CONTAINER_NAME")
+	defer os.Unsetenv("NETFLIX_PROCESS_NAME")
+
+	tags := map[string]string{
+		"nf.app":       "app",
+		"nf.account":   "1234",
+		"nf.container": "passed_in_container",
+		"nf.process":   "passed_in_process",
+	}
+	r, _ := NewRegistry(&Config{
+		CommonTags: tags,
+	})
+
+	logger := logger.NewDefaultLogger()
+	expectedConfig := Config{
+		CommonTags: map[string]string{
+			"nf.app":       "app",
+			"nf.account":   "1234",
+			"nf.container": "passed_in_container",
+			"nf.process":   "passed_in_process",
+		},
+		Log: logger,
+	}
+
+	// Set the same logger so that we can compare the configs
+	cfg := r.config
+	cfg.Log = logger
+
+	if !reflect.DeepEqual(&expectedConfig, cfg) {
+		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
+	}
 }
 
 func TestGetLocation_ConfigValue(t *testing.T) {
