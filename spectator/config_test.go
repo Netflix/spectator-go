@@ -29,6 +29,28 @@ func TestNewRegistryConfiguredBy(t *testing.T) {
 	}
 }
 
+func TestNewRegistryConfiguredBy_ExtraKeysAreIgnored(t *testing.T) {
+	r, err := NewRegistryConfiguredBy("test_config_extra_keys.json")
+	if err != nil {
+		t.Fatal("Unable to get a registry", err)
+	}
+
+	logger := logger.NewDefaultLogger()
+	expectedConfig := Config{
+		Location:   "",
+		CommonTags: map[string]string{"nf.app": "app", "nf.account": "1234"},
+		Log:        logger,
+	}
+
+	// Set the same logger so that we can compare the configs
+	cfg := r.config
+	cfg.Log = logger
+
+	if !reflect.DeepEqual(&expectedConfig, cfg) {
+		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
+	}
+}
+
 func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 	_ = os.Setenv("TITUS_CONTAINER_NAME", "container_name")
 	_ = os.Setenv("NETFLIX_PROCESS_NAME", "process_name")
