@@ -1,4 +1,4 @@
-package spectator
+package logger
 
 import (
 	"log"
@@ -20,7 +20,7 @@ type DefaultLogger struct {
 	error *log.Logger
 }
 
-func defaultLogger() *DefaultLogger {
+func NewDefaultLogger() *DefaultLogger {
 	flags := log.LstdFlags
 
 	debug := log.New(os.Stdout, "DEBUG: ", flags)

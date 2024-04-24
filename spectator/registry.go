@@ -8,27 +8,21 @@ package spectator
 
 import (
 	"encoding/json"
+	"github.com/Netflix/spectator-go/spectator/logger"
 	"github.com/Netflix/spectator-go/spectator/meter"
 	"github.com/Netflix/spectator-go/spectator/writer"
 	"io/ioutil"
 	"path/filepath"
 )
 
-// Config represents the Registry's configuration.
-type Config struct {
-	CommonTags map[string]string `json:"common_tags"`
-	Log        Logger
-}
-
 // Meter represents the functionality presented by the individual meter types.
 type Meter interface {
 	MeterId() *meter.Id
 }
 
-// RegistryInterface was extracted from Registry. It's used to make sure we're honoring the same API for thin and fat client, might delete later.
 type RegistryInterface interface {
-	GetLogger() Logger
-	SetLogger(logger Logger)
+	GetLogger() logger.Logger
+	SetLogger(logger logger.Logger)
 	NewMeter(id *meter.Id, meterFactory MeterFactoryFun) Meter
 	NewId(name string, tags map[string]string) *meter.Id
 	Counter(name string, tags map[string]string) *meter.Counter
@@ -45,6 +39,7 @@ type RegistryInterface interface {
 	PercentileDistributionSummaryWithId(id *meter.Id) *meter.PercentileDistributionSummary
 	PercentileTimer(name string, tags map[string]string) *meter.PercentileTimer
 	PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer
+	Close()
 }
 
 // MeterFactoryFun is a type to allow dependency injection of the function used to generate meters.
@@ -75,7 +70,12 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 		return nil, err
 	}
 
-	return NewRegistry(&config), nil
+	registry, err := NewRegistry(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return registry, nil
 }
 
 // NewRegistry generates a new registry from the config.
@@ -84,9 +84,9 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 // true.
 //
 // If config.Log is unset, it defaults to using the default logger.
-func NewRegistry(config *Config) *Registry {
+func NewRegistry(config *Config) (*Registry, error) {
 	if config.Log == nil {
-		config.Log = defaultLogger()
+		config.Log = logger.NewDefaultLogger()
 	}
 
 	mergedTags := tagsFromEnvVars()
@@ -96,22 +96,26 @@ func NewRegistry(config *Config) *Registry {
 	}
 	config.CommonTags = mergedTags
 
-	printWriter := &writer.PrintWriter{}
+	udpWriter, err := writer.NewWriter(config.GetLocation(), config.Log)
+	if err != nil {
+		return nil, err
+	}
+
 	r := &Registry{
 		config: config,
-		writer: printWriter,
+		writer: udpWriter,
 		quit:   make(chan struct{}),
 	}
 
-	return r
+	return r, nil
 }
 
 // GetLogger returns the internal logger.
-func (r *Registry) GetLogger() Logger {
+func (r *Registry) GetLogger() logger.Logger {
 	return r.config.Log
 }
 
-func (r *Registry) SetLogger(logger Logger) {
+func (r *Registry) SetLogger(logger logger.Logger) {
 	r.config.Log = logger
 }
 
@@ -192,8 +196,10 @@ func (r *Registry) PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer {
 	return meter.NewPercentileTimer(id, r.writer)
 }
 
-// Stop shuts down the running goroutine(s), and attempts to flush the metrics.
-func (r *Registry) Stop() {
-	// TODO implement
-	close(r.quit)
+func (r *Registry) Close() {
+	err := r.writer.Close()
+
+	if err != nil {
+		r.GetLogger().Errorf("Error closing writer: %v", err)
+	}
 }
