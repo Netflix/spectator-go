@@ -1,5 +1,5 @@
 {
-  "common_tags": {
+  "sidecar.common-tags": {
     "nf.account": "1234",
     "nf.app": "app"
   }
