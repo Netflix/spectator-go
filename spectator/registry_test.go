@@ -1,39 +1,98 @@
 package spectator
 
-//func TestRegistry_Counter(t *testing.T) {
-//	r := NewRegistry(config)
-//	r.Counter("foo", nil).Increment()
-//	if v := r.Counter("foo", nil).Count(); v != 1 {
-//		t.Error("Counter needs to return a previously registered counter. Expected 1, got", v)
-//	}
-//}
-//
-//func TestRegistry_DistributionSummary(t *testing.T) {
-//	r := NewRegistry(config)
-//	r.DistributionSummary("ds", nil).Record(100)
-//	if v := r.DistributionSummary("ds", nil).Count(); v != 1 {
-//		t.Error("DistributionSummary needs to return a previously registered meter. Expected 1, got", v)
-//	}
-//	if v := r.DistributionSummary("ds", nil).TotalAmount(); v != 100 {
-//		t.Error("Expected 100, Got", v)
-//	}
-//}
-//
-//func TestRegistry_Gauge(t *testing.T) {
-//	r := NewRegistry(config)
-//	r.Gauge("g", nil).Set(100)
-//	if v := r.Gauge("g", nil).Get(); v != 100 {
-//		t.Error("Gauge needs to return a previously registered meter. Expected 100, got", v)
-//	}
-//}
-//
-//func TestRegistry_Timer(t *testing.T) {
-//	r := NewRegistry(config)
-//	r.Timer("t", nil).Record(100)
-//	if v := r.Timer("t", nil).Count(); v != 1 {
-//		t.Error("Timer needs to return a previously registered meter. Expected 1, got", v)
-//	}
-//	if v := r.Timer("t", nil).TotalTime(); v != 100 {
-//		t.Error("Expected 100, Got", v)
-//	}
-//}
+import (
+	"github.com/Netflix/spectator-go/spectator/writer"
+	"testing"
+	"time"
+)
+
+func TestRegistryWithMemoryWriter_Counter(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	counter := r.Counter("test_counter", nil)
+	counter.Increment()
+	expected := "c:test_counter:1"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_Timer(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	timer := r.Timer("test_timer", nil)
+	timer.Record(100 * time.Millisecond)
+	expected := "t:test_timer:0.100000"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_Gauge(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	gauge := r.Gauge("test_gauge", nil)
+	gauge.Set(100)
+	expected := "g:test_gauge:100.000000"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_MaxGauge(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	maxGauge := r.MaxGauge("test_maxgauge", nil)
+	maxGauge.Set(200)
+	expected := "m:test_maxgauge:200.000000"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_DistributionSummary(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	distSummary := r.DistributionSummary("test_distributionsummary", nil)
+	distSummary.Record(300)
+	expected := "d:test_distributionsummary:300"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_PercentileDistributionSummary(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	percentileDistSummary := r.PercentileDistributionSummary("test_percentiledistributionsummary", nil)
+	percentileDistSummary.Record(400)
+	expected := "D:test_percentiledistributionsummary:400"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	percentileTimer := r.PercentileTimer("test_percentiletimer", nil)
+	percentileTimer.Record(500 * time.Millisecond)
+	expected := "T:test_percentiletimer:0.500000"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func NewTestRegistry(mw *writer.MemoryWriter) *Registry {
+	return &Registry{
+		writer: mw,
+		config: &Config{},
+	}
+}
