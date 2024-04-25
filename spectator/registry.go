@@ -23,7 +23,6 @@ type Meter interface {
 type RegistryInterface interface {
 	GetLogger() logger.Logger
 	SetLogger(logger logger.Logger)
-	NewMeter(id *meter.Id, meterFactory MeterFactoryFun) Meter
 	NewId(name string, tags map[string]string) *meter.Id
 	Counter(name string, tags map[string]string) *meter.Counter
 	CounterWithId(id *meter.Id) *meter.Counter
@@ -42,9 +41,6 @@ type RegistryInterface interface {
 	Close()
 }
 
-// MeterFactoryFun is a type to allow dependency injection of the function used to generate meters.
-type MeterFactoryFun func() Meter
-
 // Used to validate that Registry implements RegistryInterface at build time.
 var _ RegistryInterface = (*Registry)(nil)
 
@@ -52,7 +48,6 @@ var _ RegistryInterface = (*Registry)(nil)
 type Registry struct {
 	config *Config
 	writer writer.Writer
-	quit   chan struct{}
 }
 
 // NewRegistryConfiguredBy loads a new Config JSON file from disk at the path specified.
@@ -103,7 +98,6 @@ func NewRegistry(config *Config) (*Registry, error) {
 	r := &Registry{
 		config: config,
 		writer: newWriter,
-		quit:   make(chan struct{}),
 	}
 
 	return r, nil
@@ -116,12 +110,6 @@ func (r *Registry) GetLogger() logger.Logger {
 
 func (r *Registry) SetLogger(logger logger.Logger) {
 	r.config.Log = logger
-}
-
-// TODO investigate how to provide the same functionality for MeterFactory. Do we need to expose the writer?
-// NewMeter creates a new Meter using the provided meterFactory
-func (r *Registry) NewMeter(id *meter.Id, meterFactory MeterFactoryFun) Meter {
-	return meterFactory()
 }
 
 // NewId calls meters.NewId() and adds the CommonTags registered in the config.
