@@ -93,7 +93,7 @@ func NewRegistry(config *Config) (*Registry, error) {
 		return nil, err
 	}
 
-	config.Log.Infof("Using writer: %T", newWriter)
+	config.Log.Infof("Initializing Registry using writer: %T", newWriter)
 
 	r := &Registry{
 		config: config,
