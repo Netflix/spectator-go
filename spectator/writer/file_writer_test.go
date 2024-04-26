@@ -35,6 +35,26 @@ func TestFileWriter_Write(t *testing.T) {
 	}
 }
 
+// Test using a FileWriter with an existing file
+func TestFileWriter_WriteExistingFile(t *testing.T) {
+	defer os.Remove("testfile.txt")
+
+	// Create a file with some content
+	ioutil.WriteFile("testfile.txt", []byte("existing content\n"), 0644)
+
+	writer, _ := NewFileWriter("testfile.txt", logger.NewDefaultLogger())
+
+	line := "test line"
+	writer.Write(line)
+
+	content, _ := ioutil.ReadFile("testfile.txt")
+	expected := "existing content\ntest line\n"
+	if string(content) != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, string(content))
+	}
+
+}
+
 func TestFileWriter_Close(t *testing.T) {
 	defer os.Remove("testfile.txt")
 
