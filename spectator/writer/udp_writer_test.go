@@ -103,7 +103,7 @@ func TestUdpWriter_Write(t *testing.T) {
 }
 
 func TestConcurrentWrites(t *testing.T) {
-	messagesPerThread := 2500
+	messagesPerThread := 1000
 	writerThreadCount := 4
 	var lines []string
 

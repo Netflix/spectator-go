@@ -1,8 +1,8 @@
 package logger
 
 import (
-	"log"
-	"os"
+	"fmt"
+	"log/slog"
 )
 
 // Logger represents the shape of the logging dependency that the spectator
@@ -15,36 +15,23 @@ type Logger interface {
 
 // DefaultLogger is a plain text stdout logger.
 type DefaultLogger struct {
-	debug *log.Logger
-	info  *log.Logger
-	error *log.Logger
 }
 
 func NewDefaultLogger() *DefaultLogger {
-	flags := log.LstdFlags
-
-	debug := log.New(os.Stdout, "DEBUG: ", flags)
-	info := log.New(os.Stdout, "INFO: ", flags)
-	err := log.New(os.Stdout, "ERROR: ", flags)
-
-	return &DefaultLogger{
-		debug,
-		info,
-		err,
-	}
+	return &DefaultLogger{}
 }
 
 // Debugf is for debug level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Debugf(format string, v ...interface{}) {
-	l.debug.Printf(format, v...)
+	slog.Debug(fmt.Sprintf(format, v...))
 }
 
 // Infof is for info level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Infof(format string, v ...interface{}) {
-	l.info.Printf(format, v...)
+	slog.Info(fmt.Sprintf(format, v...))
 }
 
 // Errorf is for error level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Errorf(format string, v ...interface{}) {
-	l.error.Printf(format, v...)
+	slog.Error(fmt.Sprintf(format, v...))
 }
