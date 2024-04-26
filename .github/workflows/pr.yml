@@ -24,7 +24,7 @@ jobs:
 
       - name: Run build
         run: |
-          go build .
+          go build ./...
 
       - name: Run tests
         run: |
