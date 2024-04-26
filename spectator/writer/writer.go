@@ -83,8 +83,10 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 		// Remove the "file://" prefix to get the file path
 		filePath := strings.TrimPrefix(outputLocation, "file://")
 		return NewFileWriter(filePath, logger)
-	default:
+	case strings.HasPrefix(outputLocation, "udp://"):
 		address := strings.TrimPrefix(outputLocation, "udp://")
 		return NewUdpWriter(address, logger)
+	default:
+		return nil, fmt.Errorf("unknown output location: %s", outputLocation)
 	}
 }
