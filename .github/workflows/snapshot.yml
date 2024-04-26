@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           go version
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.50.1
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.57.2
           golangci-lint --version
 
       - name: Run build
