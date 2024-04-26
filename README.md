@@ -126,6 +126,7 @@ Possible values are:
 - `stderr`
 - `memory`
 - `file:///path/to/file`
+- `unix:///path/to/socket`
 - `udp://host:port`
 
 Location can also be set through the environment variable `SPECTATOR_OUTPUT_LOCATION`. If both are set, the Config value

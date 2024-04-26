@@ -48,9 +48,7 @@ func handleConnections(conn *net.UnixConn, msgCh chan string) {
 	}
 }
 
-func TestFileWriterWithUnixgramServer(t *testing.T) {
-	t.Skip("os.OpenFile is not suitable for opening a Unix Datagram socket.")
-
+func TestUnixgramWriterWithUnixgramServer(t *testing.T) {
 	// Create a channel for messages
 	msgCh := make(chan string)
 
@@ -63,7 +61,7 @@ func TestFileWriterWithUnixgramServer(t *testing.T) {
 	defer server.Close()
 
 	// Create a file_writer instance
-	writer, err := NewFileWriter(socketFile, logger.NewDefaultLogger()) // Assuming NewFileWriter is a function that creates a new file_writer instance
+	writer, err := NewUnixgramWriter(socketFile, logger.NewDefaultLogger()) // Assuming NewFileWriter is a function that creates a new file_writer instance
 	if err != nil {
 		t.Fatalf("Failed to create writer. Err: %v", err)
 	}

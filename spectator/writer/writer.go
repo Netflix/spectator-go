@@ -86,6 +86,9 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 	case strings.HasPrefix(outputLocation, "udp://"):
 		address := strings.TrimPrefix(outputLocation, "udp://")
 		return NewUdpWriter(address, logger)
+	case strings.HasPrefix(outputLocation, "unix://"):
+		path := strings.TrimPrefix(outputLocation, "unix://")
+		return NewUnixgramWriter(path, logger)
 	default:
 		return nil, fmt.Errorf("unknown output location: %s", outputLocation)
 	}
