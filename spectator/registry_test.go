@@ -1,6 +1,7 @@
 package spectator
 
 import (
+	"fmt"
 	"github.com/Netflix/spectator-go/spectator/writer"
 	"testing"
 	"time"
@@ -37,6 +38,20 @@ func TestRegistryWithMemoryWriter_Gauge(t *testing.T) {
 	gauge := r.Gauge("test_gauge", nil)
 	gauge.Set(100)
 	expected := "g:test_gauge:100.000000"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_GaugeWithTTL(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	ttl := 60 * time.Second
+	gauge := r.GaugeWithTTL("test_gauge_ttl", nil, ttl)
+	gauge.Set(100.1)
+
+	expected := fmt.Sprintf("g,%d:test_gauge_ttl:100.100000", int(ttl.Seconds()))
 	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
 	}

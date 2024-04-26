@@ -3,6 +3,7 @@ package meter
 import (
 	"fmt"
 	"github.com/Netflix/spectator-go/spectator/writer"
+	"time"
 )
 
 // Gauge represents a value that is sampled at a specific point in time. One
@@ -16,12 +17,17 @@ import (
 type Gauge struct {
 	id              *Id
 	writer          writer.Writer
-	meterTypeSymbol rune
+	meterTypeSymbol string
 }
 
 // NewGauge generates a new gauge, using the provided meter identifier.
 func NewGauge(id *Id, writer writer.Writer) *Gauge {
-	return &Gauge{id, writer, 'g'}
+	return &Gauge{id, writer, "g"}
+}
+
+// NewGaugeWithTTL generates a new gauge, using the provided meter identifier and ttl.
+func NewGaugeWithTTL(id *Id, writer writer.Writer, ttl time.Duration) *Gauge {
+	return &Gauge{id, writer, fmt.Sprintf("g,%d", int(ttl.Seconds()))}
 }
 
 // MeterId returns the meter identifier.
@@ -31,6 +37,6 @@ func (g *Gauge) MeterId() *Id {
 
 // Set records the current value.
 func (g *Gauge) Set(value float64) {
-	var line = fmt.Sprintf("%c:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
+	var line = fmt.Sprintf("%s:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
 	g.writer.Write(line)
 }

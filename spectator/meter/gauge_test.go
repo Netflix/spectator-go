@@ -1,8 +1,10 @@
 package meter
 
 import (
+	"fmt"
 	"github.com/Netflix/spectator-go/spectator/writer"
 	"testing"
+	"time"
 )
 
 func TestGauge_Set(t *testing.T) {
@@ -54,5 +56,18 @@ func TestGauge_SetMultipleValues(t *testing.T) {
 		if line != expectedLines[i] {
 			t.Errorf("Expected line to be %s, got %s", expectedLines[i], line)
 		}
+	}
+}
+
+func TestGaugeWithTTL_Set(t *testing.T) {
+	id := NewId("setWithTTL", nil)
+	w := writer.MemoryWriter{}
+	ttl := 60 * time.Second
+	g := NewGaugeWithTTL(id, &w, ttl)
+	g.Set(100.1)
+
+	expected := fmt.Sprintf("g,%d:setWithTTL:100.100000", int(ttl.Seconds()))
+	if w.Lines[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
 	}
 }

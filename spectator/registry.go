@@ -13,6 +13,7 @@ import (
 	"github.com/Netflix/spectator-go/spectator/writer"
 	"io/ioutil"
 	"path/filepath"
+	"time"
 )
 
 // Meter represents the functionality presented by the individual meter types.
@@ -30,6 +31,8 @@ type RegistryInterface interface {
 	TimerWithId(id *meter.Id) *meter.Timer
 	Gauge(name string, tags map[string]string) *meter.Gauge
 	GaugeWithId(id *meter.Id) *meter.Gauge
+	GaugeWithTTL(name string, tags map[string]string, ttl time.Duration) *meter.Gauge
+	GaugeWithIdWithTTL(id *meter.Id, ttl time.Duration) *meter.Gauge
 	MaxGauge(name string, tags map[string]string) *meter.MaxGauge
 	MaxGaugeWithId(id *meter.Id) *meter.MaxGauge
 	DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary
@@ -149,6 +152,14 @@ func (r *Registry) Gauge(name string, tags map[string]string) *meter.Gauge {
 
 func (r *Registry) GaugeWithId(id *meter.Id) *meter.Gauge {
 	return meter.NewGauge(id, r.writer)
+}
+
+func (r *Registry) GaugeWithTTL(name string, tags map[string]string, duration time.Duration) *meter.Gauge {
+	return meter.NewGaugeWithTTL(r.NewId(name, tags), r.writer, duration)
+}
+
+func (r *Registry) GaugeWithIdWithTTL(id *meter.Id, duration time.Duration) *meter.Gauge {
+	return meter.NewGaugeWithTTL(id, r.writer, duration)
 }
 
 func (r *Registry) MaxGauge(name string, tags map[string]string) *meter.MaxGauge {

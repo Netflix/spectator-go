@@ -161,7 +161,6 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 	return NewId(id.name, newTags)
 }
 
-// TODO implement Atlas name restrictions https://github.com/Netflix-Skunkworks/spectatord?tab=readme-ov-file#metric-name-and-tags
 func toSpectatorId(name string, tags map[string]string) string {
 	result := name
 
