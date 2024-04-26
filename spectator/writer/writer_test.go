@@ -55,14 +55,14 @@ func TestNewWriter(t *testing.T) {
 }
 
 func TestNewWriter_InvalidOutputLocation(t *testing.T) {
-	_, err := NewWriter("invalid", nil)
+	_, err := NewWriter("invalid", logger.NewDefaultLogger())
 	if err == nil {
 		t.Errorf("Expected error, got nil")
 	}
 }
 
 func TestNewWriter_EmptyOutputLocation(t *testing.T) {
-	_, err := NewWriter("", nil)
+	_, err := NewWriter("", logger.NewDefaultLogger())
 	if err == nil {
 		t.Errorf("Expected error, got nil")
 	}
