@@ -105,7 +105,7 @@ implemented at the Debug level which can help diagnose the metric publishing wor
 
 ---
 
-## Migrating from 0.2.X to 0.3.X
+## Migrating from 0.X to 1.X
 
 Version 0.3 consists of a major rewrite that turns spectator-go into a thin client designed to send metrics through
 [spectatord](https://github.com/Netflix-Skunkworks/spectatord). As a result some functionality has been moved to other
