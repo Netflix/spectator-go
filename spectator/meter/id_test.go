@@ -116,3 +116,30 @@ func TestId_WithStat(t *testing.T) {
 		t.Errorf("Got %s", id2.String())
 	}
 }
+
+func TestToSpectatorId(t *testing.T) {
+	name := "test"
+	tags := map[string]string{
+		"tag1": "value1",
+		"tag2": "value2",
+	}
+
+	expected := "test,tag1=value1,tag2=value2"
+	result := toSpectatorId(name, tags)
+
+	if result != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, result)
+	}
+}
+
+func TestToSpectatorId_EmptyTags(t *testing.T) {
+	name := "test"
+	tags := map[string]string{}
+
+	expected := "test"
+	result := toSpectatorId(name, tags)
+
+	if result != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, result)
+	}
+}
