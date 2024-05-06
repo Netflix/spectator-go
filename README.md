@@ -186,3 +186,4 @@ Common tags are now automatically added to all Meters. Their values are read fro
    [README](https://github.com/Netflix/spectator-go-runtime-metrics)
 5. If you use `PercentileDistributionSummary` or `PercentileTimer` you need to update your code to use the respective
    functions provided by the Registry to initialize these meters.
+6. Remove dependency on Spectator Go Internal configuration library. Such dependency is no longer required.
