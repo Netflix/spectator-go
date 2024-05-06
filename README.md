@@ -5,14 +5,14 @@
 # Spectator-go
 
 > :warning: Experimental
- 
+
 Simple library for instrumenting code to record dimensional time series.
 
 ## Description
 
-This implements a basic [Spectator](https://github.com/Netflix/spectator)
-library for instrumenting golang applications, sending metrics to an Atlas
-aggregator service.
+This implements a basic [Spectator](https://github.com/Netflix/spectator) library for instrumenting Go applications.
+It consists of a thin client designed to send metrics
+through [spectatord](https://github.com/Netflix-Skunkworks/spectatord).
 
 ## Instrumenting Code
 
@@ -20,16 +20,17 @@ aggregator service.
 package main
 
 import (
-	"github.com/Netflix/spectator-go"
+	"github.com/Netflix/spectator-go/spectator"
+	"github.com/Netflix/spectator-go/spectator/meter"
 	"strconv"
 	"time"
 )
 
 type Server struct {
-	registry       *spectator.Registry
-	requestCountId *spectator.Id
-	requestLatency *spectator.Timer
-	responseSizes  *spectator.DistributionSummary
+	registry       spectator.Registry
+	requestCountId *meter.Id
+	requestLatency *meter.Timer
+	responseSizes  *meter.DistributionSummary
 }
 
 type Request struct {
@@ -42,27 +43,27 @@ type Response struct {
 }
 
 func (s *Server) Handle(request *Request) (res *Response) {
-	clock := s.registry.Clock()
-	start := clock.Now()
+	start := time.Now()
 
-	// initialize res
+	// initialize response
 	res = &Response{200, 64}
 
-	// Update the counter id with dimensions based on the request. The
-	// counter will then be looked up in the registry which should be
-	// fairly cheap, such as lookup of id object in a map
-	// However, it is more expensive than having a local variable set
-	// to the counter.
-	cntId := s.requestCountId.WithTag("country", request.country).WithTag("status", strconv.Itoa(res.status))
-	s.registry.CounterWithId(cntId).Increment()
+	// Update the counter with dimensions based on the request.
+	tags := map[string]string{
+		"country": request.country,
+		"status":  strconv.Itoa(res.status),
+	}
+	requestCounterWithTags := s.requestCountId.WithTags(tags)
+	counter := s.registry.CounterWithId(requestCounterWithTags)
+	counter.Increment()
 
 	// ...
-	s.requestLatency.Record(clock.Now().Sub(start))
+	s.requestLatency.Record(time.Since(start))
 	s.responseSizes.Record(res.size)
 	return
 }
 
-func newServer(registry *spectator.Registry) *Server {
+func newServer(registry spectator.Registry) *Server {
 	return &Server{
 		registry,
 		registry.NewId("server.requestCount", nil),
@@ -78,19 +79,15 @@ func getNextRequest() *Request {
 
 func main() {
 	commonTags := map[string]string{"nf.app": "example", "nf.region": "us-west-1"}
-	config := &spectator.Config{Frequency: 5 * time.Second, Timeout: 1 * time.Second,
-		Uri: "http://example.org/api/v1/publish", CommonTags: commonTags}
-	registry := spectator.NewRegistry(config)
+	config := &spectator.Config{CommonTags: commonTags}
+
+	registry, _ := spectator.NewRegistry(config)
+	defer registry.Close()
 
 	// optionally set custom logger (it must implement Debugf, Infof, Errorf)
 	// registry.SetLogger(logger)
-	registry.Start()
-	defer registry.Stop()
 
-	// collect memory and file descriptor metrics
-	spectator.CollectRuntimeMetrics(registry)
-
-	server := newServer(registry)
+	server := newServer(*registry)
 
 	for i := 1; i < 3; i++ {
 		// get a request
@@ -102,39 +99,91 @@ func main() {
 
 ## Logging
 
-Logging is implemented with the standard Golang [log package](https://pkg.go.dev/log). The logger
-defines interfaces for [Debugf, Infof, and Errorf](./logger.go#L10-L14) which means that under
-normal operation, you will see log messages for all of these levels. There are
-[useful messages](https://github.com/Netflix/spectator-go/blob/master/registry.go#L268-L273)
-implemented at the Debug level which can help diagnose the metric publishing workflow. If you do
-not see any of these messages, then it is an indication that the Registry may not be started.
+Logging is implemented with the standard Golang [slog package](https://pkg.go.dev/log/slog). The logger
+defines interfaces for [Debugf, Infof, and Errorf](./spectator/logger/logger.go). There are useful messages
+implemented at the Debug level which can help diagnose the metric publishing workflow.
 
-If you do not wish to see debug log messages from spectator-go, then you should configure a custom
-logger which implements the Logger interface. A library such as [Zap](https://github.com/uber-go/zap)
-can provide this functionality, which will then allow for log level control at the command line
-with the `--log-level=debug` flag.
+---
 
-## Debugging Metric Payloads
+## Migrating from 0.X to 1.X
 
-Set the following environment variable to enumerate the metrics payloads which
-are sent to the backend. This is useful for debugging metric publishing issues.
+Version 0.3 consists of a major rewrite that turns spectator-go into a thin client designed to send metrics through
+[spectatord](https://github.com/Netflix-Skunkworks/spectatord). As a result some functionality has been moved to other
+packages or removed.
 
-```
-export SPECTATOR_DEBUG_PAYLOAD=1
-```
+### New
 
-## Known Issues
+#### Writers
 
-### Unable to close body: context canceled
+`spectator.Registry` now supports different writers. The default writer is `writer.UdpWriter` which sends metrics
+to spectatord through UDP.
 
-If you see the following two error messages repeated in your application logs, then you are running
-version 1.16.10 or 1.17.3 of Golang which introduced a regression ([Issue#49366]). See [PR#59] in
-this project for related discussion.
+Writers can be configured through `spectator.Config.Location` (`sidecar.output-location` in file based configuration).
+Possible values are:
 
-```
-level=error msg="Could not POST measurements: HTTP 200 context canceled"
-level=error msg="Unable to close body: context canceled"
-```
+- `none`
+- `stdout`
+- `stderr`
+- `memory`
+- `file:///path/to/file`
+- `unix:///path/to/socket`
+- `udp://host:port`
 
-[Issue#49366]: https://github.com/golang/go/issues/49366
-[PR#59]: https://github.com/Netflix/spectator-go/pull/59
+Location can also be set through the environment variable `SPECTATOR_OUTPUT_LOCATION`. If both are set, the Config value
+takes precedence over the environment variable.
+
+#### Meters
+
+The following new Meters have been added:
+
+- `meter.MaxGauge`
+- `meter.Gauge` with TTL
+
+#### Common Tags
+
+Common tags are now automatically added to all Meters. Their values are read from the environment variables.
+
+| Tag          | Environment Variable |
+|--------------|----------------------|
+| nf.container | TITUS_CONTAINER_NAME |
+| nf.process   | NETFLIX_PROCESS_NAME |
+
+### Moved
+
+- Runtime metrics collection has been moved
+  to [spectator-go-runtime-metrics](https://github.com/Netflix/spectator-go-runtime-metrics). Follow instructions in
+  the [README](https://github.com/Netflix/spectator-go-runtime-metrics) to enable
+  collection.
+- Some types have been moved to different packages. For example, `spectator.Counter` is now in `meter.Counter`.
+
+### Removed
+
+- `spectator.HttpClient` has been removed. Use the standard `http.Client` instead.
+- `spectator.Meter`s no longer has a `Measure() []Measurement` function. Meters are now stateless and do not store
+  measurements.
+- `spectator.Clock` has been removed. Use the standard `time` package instead.
+- `spectator.Config` has been greatly simplified.
+    - If you're using file based configuration, `"common_tags"` has been renamed to `"sidecar.common-tags"`.
+- `spectator.Registry` no longer has a `Start()` function. It is now automatically started when created.
+- `spectator.Registry` no longer has a `Stop()` function. Instead, use `Close()` to close the registry.
+- `spectator.Config.IpcTimerRecord` has been removed. Use a `meter.Timer` instead to record Ipc metrics.
+- `spectator.MeterFactoryFun` has been removed. If you need to create a custom meter you can do so by wrapping one of
+  the meters returned by `spectator.Registry`.
+- `spectator.Registry` no longer reports `spectator.measurements` metrics. Instead, you can use spectatord metrics to
+  troubleshoot.
+- `spectator.Registry` no longer keep track of the Meters it creates. This means that you can't get a list of all Meters
+  from the Registry. If you need to keep track of Meters, you can do so in your application code.
+- `Percentile*` meters no longer support defining min/max values.
+
+### Migration steps
+
+1. Make sure you're not relying on any of the [removed functionality](#removed).
+2. Update imports to use `meters` package instead of `spectator` for Meters.
+3. If you're using file-based configuration rename `"common_tags"` to `"sidecar.common-tags"`.
+4. If you want to collect runtime metrics
+   pull [spectator-go-runtime-metrics](https://github.com/Netflix/spectator-go-runtime-metrics) and follow the
+   instructions in the
+   [README](https://github.com/Netflix/spectator-go-runtime-metrics)
+5. If you use `PercentileDistributionSummary` or `PercentileTimer` you need to update your code to use the respective
+   functions provided by the Registry to initialize these meters.
+6. Remove dependency on Spectator Go Internal configuration library. Such dependency is no longer required.
