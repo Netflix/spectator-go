@@ -124,11 +124,13 @@ func TestToSpectatorId(t *testing.T) {
 		"tag2": "value2",
 	}
 
-	expected := "test,tag1=value1,tag2=value2"
+	// The order of the tags is not guaranteed
+	expected1 := "test,tag1=value1,tag2=value2"
+	expected2 := "test,tag2=value2,tag1=value1"
 	result := toSpectatorId(name, tags)
 
-	if result != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, result)
+	if result != expected1 && result != expected2 {
+		t.Errorf("Expected '%s' or '%s', got '%s'", expected1, expected2, result)
 	}
 }
 
