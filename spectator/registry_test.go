@@ -19,6 +19,18 @@ func TestRegistryWithMemoryWriter_Counter(t *testing.T) {
 	}
 }
 
+func TestRegistryWithMemoryWriter_MonotonicCounter(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	counter := r.MonotonicCounter("test_monotonic_counter", nil)
+	counter.Set(1)
+	expected := "C:test_monotonic_counter:1"
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
 func TestRegistryWithMemoryWriter_Timer(t *testing.T) {
 	mw := &writer.MemoryWriter{}
 	r := NewTestRegistry(mw)
@@ -52,6 +64,18 @@ func TestRegistryWithMemoryWriter_GaugeWithTTL(t *testing.T) {
 	gauge.Set(100.1)
 
 	expected := fmt.Sprintf("g,%d:test_gauge_ttl:100.100000", int(ttl.Seconds()))
+	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_AgeGauge(t *testing.T) {
+	mw := &writer.MemoryWriter{}
+	r := NewTestRegistry(mw)
+
+	ageGauge := r.AgeGauge("test_age_gauge", nil)
+	ageGauge.Set(100)
+	expected := "A:test_age_gauge:100"
 	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
 	}
