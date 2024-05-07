@@ -10,7 +10,7 @@ import (
 type PercentileDistributionSummary struct {
 	id              *Id
 	writer          writer.Writer
-	meterTypeSymbol rune
+	meterTypeSymbol string
 }
 
 func (p *PercentileDistributionSummary) MeterId() *Id {
@@ -19,13 +19,13 @@ func (p *PercentileDistributionSummary) MeterId() *Id {
 
 // NewPercentileDistributionSummary creates a new *PercentileDistributionSummary using the meter identifier.
 func NewPercentileDistributionSummary(id *Id, writer writer.Writer) *PercentileDistributionSummary {
-	return &PercentileDistributionSummary{id, writer, 'D'}
+	return &PercentileDistributionSummary{id, writer, "D"}
 }
 
 // Record records a new value to track within the distribution.
 func (p *PercentileDistributionSummary) Record(amount int64) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%c:%s:%d", p.meterTypeSymbol, p.id.spectatordId, amount)
+		var line = fmt.Sprintf("%s:%s:%d", p.meterTypeSymbol, p.id.spectatordId, amount)
 		p.writer.Write(line)
 	}
 }
