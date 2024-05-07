@@ -4,8 +4,6 @@
 
 # Spectator-go
 
-> :warning: Experimental
-
 Simple library for instrumenting code to record dimensional time series.
 
 ## Description
