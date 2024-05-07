@@ -16,12 +16,12 @@ import (
 type MaxGauge struct {
 	id              *Id
 	writer          writer.Writer
-	meterTypeSymbol rune
+	meterTypeSymbol string
 }
 
 // NewMaxGauge generates a new gauge, using the provided meter identifier.
 func NewMaxGauge(id *Id, writer writer.Writer) *MaxGauge {
-	return &MaxGauge{id, writer, 'm'}
+	return &MaxGauge{id, writer, "m"}
 }
 
 // MeterId returns the meter identifier.
@@ -31,6 +31,6 @@ func (g *MaxGauge) MeterId() *Id {
 
 // Set records the current value.
 func (g *MaxGauge) Set(value float64) {
-	var line = fmt.Sprintf("%c:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
+	var line = fmt.Sprintf("%s:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
 	g.writer.Write(line)
 }

@@ -15,12 +15,12 @@ import (
 type Counter struct {
 	id              *Id
 	writer          writer.Writer
-	meterTypeSymbol rune
+	meterTypeSymbol string
 }
 
 // NewCounter generates a new counter, using the provided meter identifier.
 func NewCounter(id *Id, writer writer.Writer) *Counter {
-	return &Counter{id, writer, 'c'}
+	return &Counter{id, writer, "c"}
 }
 
 // MeterId returns the meter identifier.
@@ -30,14 +30,14 @@ func (c *Counter) MeterId() *Id {
 
 // Increment increments the counter.
 func (c *Counter) Increment() {
-	var line = fmt.Sprintf("%c:%s:%d", c.meterTypeSymbol, c.id.spectatordId, 1)
+	var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, 1)
 	c.writer.Write(line)
 }
 
 // AddFloat adds a specific float64 delta to the current measurement.
 func (c *Counter) AddFloat(delta float64) {
 	if delta > 0.0 {
-		var line = fmt.Sprintf("%c:%s:%f", c.meterTypeSymbol, c.id.spectatordId, delta)
+		var line = fmt.Sprintf("%s:%s:%f", c.meterTypeSymbol, c.id.spectatordId, delta)
 		c.writer.Write(line)
 	}
 }
@@ -45,7 +45,7 @@ func (c *Counter) AddFloat(delta float64) {
 // Add is to add a specific int64 delta to the current measurement.
 func (c *Counter) Add(delta int64) {
 	if delta > 0 {
-		var line = fmt.Sprintf("%c:%s:%d", c.meterTypeSymbol, c.id.spectatordId, delta)
+		var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, delta)
 		c.writer.Write(line)
 	}
 }

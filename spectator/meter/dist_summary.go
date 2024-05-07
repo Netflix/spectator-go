@@ -15,13 +15,13 @@ import (
 type DistributionSummary struct {
 	id              *Id
 	writer          writer.Writer
-	meterTypeSymbol rune
+	meterTypeSymbol string
 }
 
 // NewDistributionSummary generates a new distribution summary, using the
 // provided meter identifier.
 func NewDistributionSummary(id *Id, writer writer.Writer) *DistributionSummary {
-	return &DistributionSummary{id, writer, 'd'}
+	return &DistributionSummary{id, writer, "d"}
 }
 
 // MeterId returns the meter identifier.
@@ -32,7 +32,7 @@ func (d *DistributionSummary) MeterId() *Id {
 // Record records a new value to track within the distribution.
 func (d *DistributionSummary) Record(amount int64) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%c:%s:%d", d.meterTypeSymbol, d.id.spectatordId, amount)
+		var line = fmt.Sprintf("%s:%s:%d", d.meterTypeSymbol, d.id.spectatordId, amount)
 		d.writer.Write(line)
 	}
 }

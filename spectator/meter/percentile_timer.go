@@ -11,14 +11,14 @@ import (
 type PercentileTimer struct {
 	id              *Id
 	writer          writer.Writer
-	meterTypeSymbol rune
+	meterTypeSymbol string
 }
 
 func NewPercentileTimer(
 	id *Id,
 	writer writer.Writer,
 ) *PercentileTimer {
-	return &PercentileTimer{id, writer, 'T'}
+	return &PercentileTimer{id, writer, "T"}
 }
 
 func (t *PercentileTimer) MeterId() *Id {
@@ -28,7 +28,7 @@ func (t *PercentileTimer) MeterId() *Id {
 // Record records the value for a single event.
 func (t *PercentileTimer) Record(amount time.Duration) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%c:%s:%f", t.meterTypeSymbol, t.id.spectatordId, amount.Seconds())
+		var line = fmt.Sprintf("%s:%s:%f", t.meterTypeSymbol, t.id.spectatordId, amount.Seconds())
 		t.writer.Write(line)
 	}
 }
