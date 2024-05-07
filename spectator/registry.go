@@ -27,12 +27,16 @@ type RegistryInterface interface {
 	NewId(name string, tags map[string]string) *meter.Id
 	Counter(name string, tags map[string]string) *meter.Counter
 	CounterWithId(id *meter.Id) *meter.Counter
+	MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter
+	MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter
 	Timer(name string, tags map[string]string) *meter.Timer
 	TimerWithId(id *meter.Id) *meter.Timer
 	Gauge(name string, tags map[string]string) *meter.Gauge
 	GaugeWithId(id *meter.Id) *meter.Gauge
 	GaugeWithTTL(name string, tags map[string]string, ttl time.Duration) *meter.Gauge
 	GaugeWithIdWithTTL(id *meter.Id, ttl time.Duration) *meter.Gauge
+	AgeGauge(name string, tags map[string]string) *meter.AgeGauge
+	AgeGaugeWithId(id *meter.Id) *meter.AgeGauge
 	MaxGauge(name string, tags map[string]string) *meter.MaxGauge
 	MaxGaugeWithId(id *meter.Id) *meter.MaxGauge
 	DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary
@@ -136,6 +140,16 @@ func (r *Registry) CounterWithId(id *meter.Id) *meter.Counter {
 	return meter.NewCounter(id, r.writer)
 }
 
+// MonotonicCounter calls NewId() with the name and tags, and then calls r.MonotonicCounterWithId()
+// using that *Id.
+func (r *Registry) MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter {
+	return meter.NewMonotonicCounter(r.NewId(name, tags), r.writer)
+}
+
+func (r *Registry) MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter {
+	return meter.NewMonotonicCounter(id, r.writer)
+}
+
 // Timer calls NewId() with the name and tags, and then calls r.TimerWithId() using that *Id.
 func (r *Registry) Timer(name string, tags map[string]string) *meter.Timer {
 	return meter.NewTimer(r.NewId(name, tags), r.writer)
@@ -160,6 +174,14 @@ func (r *Registry) GaugeWithTTL(name string, tags map[string]string, duration ti
 
 func (r *Registry) GaugeWithIdWithTTL(id *meter.Id, duration time.Duration) *meter.Gauge {
 	return meter.NewGaugeWithTTL(id, r.writer, duration)
+}
+
+func (r *Registry) AgeGauge(name string, tags map[string]string) *meter.AgeGauge {
+	return meter.NewAgeGauge(r.NewId(name, tags), r.writer)
+}
+
+func (r *Registry) AgeGaugeWithId(id *meter.Id) *meter.AgeGauge {
+	return meter.NewAgeGauge(id, r.writer)
 }
 
 func (r *Registry) MaxGauge(name string, tags map[string]string) *meter.MaxGauge {
