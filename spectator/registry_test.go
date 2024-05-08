@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-func TestRegistry_Clock(t *testing.T) {
-	mw := &writer.MemoryWriter{}
-	clock := &ManualClock{1}
-	r := NewTestRegistryWithClock(mw, clock)
-	now := r.Clock().Now()
-	expected := time.Unix(0, 1)
-	if now != expected {
-		t.Errorf("Expected '%+v', got '%+v'", expected, now)
-	}
-}
-
 func TestRegistryWithMemoryWriter_Counter(t *testing.T) {
 	mw := &writer.MemoryWriter{}
 	r := NewTestRegistry(mw)
@@ -142,15 +131,6 @@ func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
 
 func NewTestRegistry(mw *writer.MemoryWriter) *Registry {
 	return &Registry{
-		clock:  &SystemClock{},
-		config: &Config{},
-		writer: mw,
-	}
-}
-
-func NewTestRegistryWithClock(mw *writer.MemoryWriter, clock Clock) *Registry {
-	return &Registry{
-		clock:  clock,
 		config: &Config{},
 		writer: mw,
 	}

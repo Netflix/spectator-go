@@ -24,7 +24,6 @@ type Meter interface {
 type RegistryInterface interface {
 	GetLogger() logger.Logger
 	SetLogger(logger logger.Logger)
-	Clock() Clock
 	NewId(name string, tags map[string]string) *meter.Id
 	Counter(name string, tags map[string]string) *meter.Counter
 	CounterWithId(id *meter.Id) *meter.Counter
@@ -54,7 +53,6 @@ var _ RegistryInterface = (*Registry)(nil)
 
 // Registry is the collection of meters being reported.
 type Registry struct {
-	clock  Clock
 	config *Config
 	writer writer.Writer
 }
@@ -105,20 +103,11 @@ func NewRegistry(config *Config) (*Registry, error) {
 	config.Log.Infof("Initializing Registry using writer: %T", newWriter)
 
 	r := &Registry{
-		clock:  &SystemClock{},
 		config: config,
 		writer: newWriter,
 	}
 
 	return r, nil
-}
-
-// NewRegistryWithClock returns a new registry with the clock overridden to the
-// one injected here. This function is mostly used for testing.
-func NewRegistryWithClock(config *Config, clock Clock) *Registry {
-	r, _ := NewRegistry(config)
-	r.clock = clock
-	return r
 }
 
 // GetLogger returns the internal logger.
@@ -128,10 +117,6 @@ func (r *Registry) GetLogger() logger.Logger {
 
 func (r *Registry) SetLogger(logger logger.Logger) {
 	r.config.Log = logger
-}
-
-func (r *Registry) Clock() Clock {
-	return r.clock
 }
 
 // NewId calls meters.NewId() and adds the CommonTags registered in the config.
