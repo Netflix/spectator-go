@@ -145,3 +145,18 @@ func TestToSpectatorId_EmptyTags(t *testing.T) {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
 	}
 }
+
+func TestToSpectatorId_InvalidTags(t *testing.T) {
+	name := "test`!@#$%^&*()-=~_+[]{}\\|;:'\",<.>/?foo"
+	tags := map[string]string{
+		"tag1,:=": "value1,:=",
+		"tag2,;=": "value2,;=",
+	}
+
+	expected := "test______^____-_~______________.___foo,tag1___=value1___,tag2___=value2___"
+	result := toSpectatorId(name, tags)
+
+	if result != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, result)
+	}
+}
