@@ -119,13 +119,13 @@ to spectatord through UDP.
 Writers can be configured through `spectator.Config.Location` (`sidecar.output-location` in file based configuration).
 Possible values are:
 
-- `none`
-- `stdout`
-- `stderr`
-- `memory`
-- `file:///path/to/file`
-- `unix:///path/to/socket`
-- `udp://host:port`
+- `none`: Configures a no-op writer that does nothing. Can be used to disable metrics collection.
+- `stdout`: Writes metrics to stdout.
+- `stderr`: Writes metrics to stderr.
+- `memory`: Writes metrics to memory. Useful for testing.
+- `file:///path/to/file`: Writes metrics to a file.
+- `unix:///path/to/socket`: Writes metrics to a Unix domain socket.
+- `udp://host:port`: Writes metrics to a UDP socket.
 
 Location can also be set through the environment variable `SPECTATOR_OUTPUT_LOCATION`. If both are set, the Config value
 takes precedence over the environment variable.
@@ -163,7 +163,9 @@ Common tags are now automatically added to all Meters. Their values are read fro
 - `spectator.Config` has been greatly simplified.
     - If you're using file based configuration, `"common_tags"` has been renamed to `"sidecar.common-tags"`.
 - `spectator.Registry` no longer has a `Start()` function. It is now automatically started when created.
-- `spectator.Registry` no longer has a `Stop()` function. Instead, use `Close()` to close the registry.
+- `spectator.Registry` no longer has a `Stop()` function. Instead, use `Close()` to close the registry. Once the
+  registry
+  is closed, it can't be started again.
 - `spectator.Config.IpcTimerRecord` has been removed. Use a `meter.Timer` instead to record Ipc metrics.
 - `spectator.MeterFactoryFun` has been removed. If you need to create a custom meter you can do so by wrapping one of
   the meters returned by `spectator.Registry`.
@@ -185,3 +187,5 @@ Common tags are now automatically added to all Meters. Their values are read fro
 5. If you use `PercentileDistributionSummary` or `PercentileTimer` you need to update your code to use the respective
    functions provided by the Registry to initialize these meters.
 6. Remove dependency on Spectator Go Internal configuration library. Such dependency is no longer required.
+7. There is no longer an option to start or stop the registry at runtime. If you need to configure a registry that
+   doesn't emit metrics, you can use the `spectator.Config.Location` option with `none` to configure a no-op writer.
