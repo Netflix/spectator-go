@@ -164,8 +164,7 @@ Common tags are now automatically added to all Meters. Their values are read fro
     - If you're using file based configuration, `"common_tags"` has been renamed to `"sidecar.common-tags"`.
 - `spectator.Registry` no longer has a `Start()` function. It is now automatically started when created.
 - `spectator.Registry` no longer has a `Stop()` function. Instead, use `Close()` to close the registry. Once the
-  registry
-  is closed, it can't be started again.
+  registry is closed, it can't be started again.
 - `spectator.Config.IpcTimerRecord` has been removed. Use a `meter.Timer` instead to record Ipc metrics.
 - `spectator.MeterFactoryFun` has been removed. If you need to create a custom meter you can do so by wrapping one of
   the meters returned by `spectator.Registry`.
