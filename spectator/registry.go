@@ -45,6 +45,7 @@ type RegistryInterface interface {
 	PercentileDistributionSummaryWithId(id *meter.Id) *meter.PercentileDistributionSummary
 	PercentileTimer(name string, tags map[string]string) *meter.PercentileTimer
 	PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer
+	GetWriter() writer.Writer
 	Close()
 }
 
@@ -214,6 +215,10 @@ func (r *Registry) PercentileTimer(name string, tags map[string]string) *meter.P
 
 func (r *Registry) PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer {
 	return meter.NewPercentileTimer(id, r.writer)
+}
+
+func (r *Registry) GetWriter() writer.Writer {
+	return r.writer
 }
 
 func (r *Registry) Close() {
