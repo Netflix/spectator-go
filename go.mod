@@ -1,6 +1,6 @@
 module github.com/Netflix/spectator-go
 
-go 1.12
+go 1.21
 
 require (
 	github.com/json-iterator/go v1.1.12

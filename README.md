@@ -4,13 +4,15 @@
 
 # Spectator-go
 
-Simple library for instrumenting code to record dimensional time series.
+This implements a basic [Spectator](https://github.com/Netflix/spectator) library for instrumenting Go applications. It
+consists of a thin client designed to send metrics through [spectatord](https://github.com/Netflix-Skunkworks/spectatord).
 
-## Description
+## Supported Go Versions
 
-This implements a basic [Spectator](https://github.com/Netflix/spectator) library for instrumenting Go applications.
-It consists of a thin client designed to send metrics
-through [spectatord](https://github.com/Netflix-Skunkworks/spectatord).
+This library currently targets the [latest two stable versions](https://go.dev/dl/) of Go.
+
+There is one language feature used in the project which requires at least 1.21 - the
+[log/slog structured logging library](https://go.dev/blog/slog).
 
 ## Instrumenting Code
 
