@@ -100,7 +100,7 @@ func NewRegistry(config *Config) (*Registry, error) {
 	}
 	config.CommonTags = mergedTags
 
-	newWriter, err := writer.NewWriter(config.GetLocation(), config.Log)
+	newWriter, err := writer.NewWriter(config.GetLocation(), log)
 	if err != nil {
 		return nil, err
 	}
