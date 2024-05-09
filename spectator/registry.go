@@ -13,6 +13,7 @@ import (
 	"github.com/Netflix/spectator-go/spectator/writer"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -52,10 +53,12 @@ type RegistryInterface interface {
 // Used to validate that Registry implements RegistryInterface at build time.
 var _ RegistryInterface = (*Registry)(nil)
 
-// Registry is the collection of meters being reported.
+// Registry is the main entry point for creating meters and emitting metrics.
 type Registry struct {
-	config *Config
-	writer writer.Writer
+	config      *Config
+	writer      writer.Writer
+	logger      logger.Logger
+	loggerMutex sync.RWMutex
 }
 
 // NewRegistryConfiguredBy loads a new Config JSON file from disk at the path specified.
@@ -85,8 +88,9 @@ func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
 //
 // If config.Log is unset, it defaults to using the default logger.
 func NewRegistry(config *Config) (*Registry, error) {
-	if config.Log == nil {
-		config.Log = logger.NewDefaultLogger()
+	log := config.Log
+	if log == nil {
+		log = logger.NewDefaultLogger()
 	}
 
 	mergedTags := tagsFromEnvVars()
@@ -96,16 +100,17 @@ func NewRegistry(config *Config) (*Registry, error) {
 	}
 	config.CommonTags = mergedTags
 
-	newWriter, err := writer.NewWriter(config.GetLocation(), config.Log)
+	newWriter, err := writer.NewWriter(config.GetLocation(), log)
 	if err != nil {
 		return nil, err
 	}
 
-	config.Log.Infof("Initializing Registry using writer: %T", newWriter)
+	log.Infof("Initializing Registry using writer: %T", newWriter)
 
 	r := &Registry{
 		config: config,
 		writer: newWriter,
+		logger: log,
 	}
 
 	return r, nil
@@ -113,11 +118,15 @@ func NewRegistry(config *Config) (*Registry, error) {
 
 // GetLogger returns the internal logger.
 func (r *Registry) GetLogger() logger.Logger {
-	return r.config.Log
+	r.loggerMutex.RLock()
+	defer r.loggerMutex.RUnlock()
+	return r.logger
 }
 
 func (r *Registry) SetLogger(logger logger.Logger) {
-	r.config.Log = logger
+	r.loggerMutex.Lock()
+	defer r.loggerMutex.Unlock()
+	r.logger = logger
 }
 
 // NewId calls meters.NewId() and adds the CommonTags registered in the config.
