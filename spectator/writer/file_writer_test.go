@@ -2,7 +2,6 @@ package writer
 
 import (
 	"github.com/Netflix/spectator-go/spectator/logger"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -29,7 +28,7 @@ func TestFileWriter_Write(t *testing.T) {
 	line := "test line"
 	writer.Write(line)
 
-	content, _ := ioutil.ReadFile("testfile.txt")
+	content, _ := os.ReadFile("testfile.txt")
 	if strings.TrimRight(string(content), "\n") != line {
 		t.Errorf("Expected '%s', got '%s'", line, string(content))
 	}
@@ -40,14 +39,14 @@ func TestFileWriter_WriteExistingFile(t *testing.T) {
 	defer os.Remove("testfile.txt")
 
 	// Create a file with some content
-	ioutil.WriteFile("testfile.txt", []byte("existing content\n"), 0644)
+	os.WriteFile("testfile.txt", []byte("existing content\n"), 0644)
 
 	writer, _ := NewFileWriter("testfile.txt", logger.NewDefaultLogger())
 
 	line := "test line"
 	writer.Write(line)
 
-	content, _ := ioutil.ReadFile("testfile.txt")
+	content, _ := os.ReadFile("testfile.txt")
 	expected := "existing content\ntest line\n"
 	if string(content) != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, string(content))
