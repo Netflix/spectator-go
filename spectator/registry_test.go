@@ -129,8 +129,8 @@ func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
 	}
 }
 
-func NewTestRegistry(mw *writer.MemoryWriter) *Registry {
-	return &Registry{
+func NewTestRegistry(mw *writer.MemoryWriter) Registry {
+	return &spectatordRegistry{
 		config: &Config{},
 		writer: mw,
 	}
