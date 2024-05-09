@@ -160,8 +160,9 @@ func TestRegistry_GetLogger_SetLogger_RaceCondition(t *testing.T) {
 }
 
 func NewTestRegistry(mw *writer.MemoryWriter) Registry {
-	return &Registry{
+	return &spectatordRegistry{
 		config: &Config{},
 		writer: mw,
+		logger: logger.NewDefaultLogger(),
 	}
 }
