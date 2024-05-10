@@ -2,7 +2,7 @@ package meter
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/spectator/writer"
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
 // MaxGauge represents a value that is sampled at a specific point in time. One

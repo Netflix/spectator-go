@@ -1,7 +1,7 @@
 package spectator
 
 import (
-	"github.com/Netflix/spectator-go/spectator/logger"
+	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"os"
 	"reflect"
 	"testing"

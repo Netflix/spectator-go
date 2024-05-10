@@ -8,9 +8,9 @@ package spectator
 
 import (
 	"encoding/json"
-	"github.com/Netflix/spectator-go/spectator/logger"
-	"github.com/Netflix/spectator-go/spectator/meter"
-	"github.com/Netflix/spectator-go/spectator/writer"
+	"github.com/Netflix/spectator-go/v2/spectator/logger"
+	"github.com/Netflix/spectator-go/v2/spectator/meter"
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"os"
 	"path/filepath"
 	"sync"

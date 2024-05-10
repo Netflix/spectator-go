@@ -1,7 +1,7 @@
 package meter
 
 import (
-	"github.com/Netflix/spectator-go/spectator/writer"
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"testing"
 	"time"
 )

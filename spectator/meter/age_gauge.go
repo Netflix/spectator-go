@@ -2,7 +2,7 @@ package meter
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/spectator/writer"
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
 // AgeGauge represents a value that is the time in seconds since the epoch at which an event

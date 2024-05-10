@@ -2,7 +2,7 @@ package meter
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/spectator/writer"
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
 // MonotonicCounter is used to measure the rate at which some event is occurring. This
