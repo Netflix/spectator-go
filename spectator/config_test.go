@@ -6,44 +6,6 @@ import (
 	"testing"
 )
 
-func TestNewRegistryConfiguredBy(t *testing.T) {
-	r, err := NewRegistryConfiguredBy("test_config.json")
-	if err != nil {
-		t.Fatal("Unable to get a registry", err)
-	}
-
-	meterId := r.NewId("test_id", nil)
-
-	// check that meter id has the expected tags
-	expectedTags := map[string]string{
-		"nf.app":     "app",
-		"nf.account": "1234",
-	}
-
-	if !reflect.DeepEqual(expectedTags, meterId.Tags()) {
-		t.Errorf("Expected tags %#v, got %#v", expectedTags, meterId.Tags())
-	}
-}
-
-func TestNewRegistryConfiguredBy_ExtraKeysAreIgnored(t *testing.T) {
-	r, err := NewRegistryConfiguredBy("test_config_extra_keys.json")
-	if err != nil {
-		t.Fatal("Unable to get a registry", err)
-	}
-
-	meterId := r.NewId("test_id", nil)
-
-	// check that meter id has the expected tags
-	expectedTags := map[string]string{
-		"nf.app":     "app",
-		"nf.account": "1234",
-	}
-
-	if !reflect.DeepEqual(expectedTags, meterId.Tags()) {
-		t.Errorf("Expected tags %#v, got %#v", expectedTags, meterId.Tags())
-	}
-}
-
 func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 	_ = os.Setenv("TITUS_CONTAINER_NAME", "container_name")
 	_ = os.Setenv("NETFLIX_PROCESS_NAME", "process_name")

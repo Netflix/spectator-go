@@ -7,13 +7,9 @@
 package spectator
 
 import (
-	"encoding/json"
 	"github.com/Netflix/spectator-go/spectator/logger"
 	"github.com/Netflix/spectator-go/spectator/meter"
 	"github.com/Netflix/spectator-go/spectator/writer"
-	"os"
-	"path/filepath"
-	"sync"
 	"time"
 )
 
@@ -25,7 +21,6 @@ type Meter interface {
 // Registry is the main entry point for interacting with the Spectator library.
 type Registry interface {
 	GetLogger() logger.Logger
-	SetLogger(logger logger.Logger)
 	NewId(name string, tags map[string]string) *meter.Id
 	Counter(name string, tags map[string]string) *meter.Counter
 	CounterWithId(id *meter.Id) *meter.Counter
@@ -57,31 +52,7 @@ var _ Registry = (*spectatordRegistry)(nil)
 type spectatordRegistry struct {
 	config *Config
 	writer writer.Writer
-	logger      logger.Logger
-	loggerMutex sync.RWMutex
-}
-
-// NewRegistryConfiguredBy loads a new Config JSON file from disk at the path specified.
-func NewRegistryConfiguredBy(filePath string) (Registry, error) {
-	path := filepath.Clean(filePath)
-	/* #nosec G304 */
-	bytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var config Config
-	err = json.Unmarshal(bytes, &config)
-	if err != nil {
-		return nil, err
-	}
-
-	registry, err := NewRegistry(&config)
-	if err != nil {
-		return nil, err
-	}
-
-	return registry, nil
+	logger logger.Logger
 }
 
 // NewRegistry generates a new registry from the config.
@@ -118,15 +89,7 @@ func NewRegistry(config *Config) (Registry, error) {
 
 // GetLogger returns the internal logger.
 func (r *spectatordRegistry) GetLogger() logger.Logger {
-	r.loggerMutex.RLock()
-	defer r.loggerMutex.RUnlock()
 	return r.logger
-}
-
-func (r *spectatordRegistry) SetLogger(logger logger.Logger) {
-	r.loggerMutex.Lock()
-	defer r.loggerMutex.Unlock()
-	r.logger = logger
 }
 
 // NewId calls meters.NewId() and adds the CommonTags registered in the config.

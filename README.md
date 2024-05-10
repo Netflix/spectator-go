@@ -84,9 +84,6 @@ func main() {
 	registry, _ := spectator.NewRegistry(config)
 	defer registry.Close()
 
-	// optionally set custom logger (it must implement Debugf, Infof, Errorf)
-	// registry.SetLogger(logger)
-
 	server := newServer(*registry)
 
 	for i := 1; i < 3; i++ {
@@ -118,7 +115,7 @@ packages or removed.
 `spectator.Registry` now supports different writers. The default writer is `writer.UdpWriter` which sends metrics
 to spectatord through UDP.
 
-Writers can be configured through `spectator.Config.Location` (`sidecar.output-location` in file based configuration).
+Writers can be configured through `spectator.Config.Location`.
 Possible values are:
 
 - `none`: Configures a no-op writer that does nothing. Can be used to disable metrics collection.
@@ -163,7 +160,6 @@ Common tags are now automatically added to all Meters. Their values are read fro
   measurements.
 - `spectator.Clock` has been removed. Use the standard `time` package instead.
 - `spectator.Config` has been greatly simplified.
-    - If you're using file based configuration, `"common_tags"` has been renamed to `"sidecar.common-tags"`.
 - `spectator.Registry` no longer has a `Start()` function. It is now automatically started when created.
 - `spectator.Registry` no longer has a `Stop()` function. Instead, use `Close()` to close the registry. Once the
   registry is closed, it can't be started again.
@@ -175,18 +171,19 @@ Common tags are now automatically added to all Meters. Their values are read fro
 - `spectator.Registry` no longer keep track of the Meters it creates. This means that you can't get a list of all Meters
   from the Registry. If you need to keep track of Meters, you can do so in your application code.
 - `Percentile*` meters no longer support defining min/max values.
+- `spectator.Registry` no longer allows setting a different logger after creation. A custom logger can be set in the
+  `spectator.Config` before creating the Registry.
 
 ### Migration steps
 
 1. Make sure you're not relying on any of the [removed functionality](#removed).
 2. Update imports to use `meters` package instead of `spectator` for Meters.
-3. If you're using file-based configuration rename `"common_tags"` to `"sidecar.common-tags"`.
-4. If you want to collect runtime metrics
+3. If you want to collect runtime metrics
    pull [spectator-go-runtime-metrics](https://github.com/Netflix/spectator-go-runtime-metrics) and follow the
    instructions in the
    [README](https://github.com/Netflix/spectator-go-runtime-metrics)
-5. If you use `PercentileDistributionSummary` or `PercentileTimer` you need to update your code to use the respective
+4. If you use `PercentileDistributionSummary` or `PercentileTimer` you need to update your code to use the respective
    functions provided by the Registry to initialize these meters.
-6. Remove dependency on Spectator Go Internal configuration library. Such dependency is no longer required.
-7. There is no longer an option to start or stop the registry at runtime. If you need to configure a registry that
+5. Remove dependency on Spectator Go Internal configuration library. Such dependency is no longer required.
+6. There is no longer an option to start or stop the registry at runtime. If you need to configure a registry that
    doesn't emit metrics, you can use the `spectator.Config.Location` option with `none` to configure a no-op writer.

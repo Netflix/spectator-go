@@ -8,8 +8,8 @@ import (
 
 // Config represents the Registry's configuration.
 type Config struct {
-	Location   string            `json:"sidecar.output-location"`
-	CommonTags map[string]string `json:"sidecar.common-tags"`
+	Location   string
+	CommonTags map[string]string
 	Log        logger.Logger
 }
 

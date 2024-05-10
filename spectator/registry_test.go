@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Netflix/spectator-go/spectator/logger"
 	"github.com/Netflix/spectator-go/spectator/writer"
-	"sync"
 	"testing"
 	"time"
 )
@@ -129,34 +128,6 @@ func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
 	if len(mw.Lines) != 1 || mw.Lines[0] != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines[0])
 	}
-}
-
-// Run this test with -race to detect race conditions
-func TestRegistry_GetLogger_SetLogger_RaceCondition(t *testing.T) {
-	config := &Config{
-		Location: "memory",
-		Log:      logger.NewDefaultLogger(),
-	}
-	r, _ := NewRegistry(config)
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 1000; i++ {
-			r.SetLogger(logger.NewDefaultLogger())
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 1000; i++ {
-			r.GetLogger()
-		}
-	}()
-
-	wg.Wait()
 }
 
 func NewTestRegistry(mw *writer.MemoryWriter) Registry {
