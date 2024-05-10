@@ -158,6 +158,6 @@ func TestToSpectatorId_InvalidTags(t *testing.T) {
 	result := toSpectatorId(name, tags)
 
 	if result != expected1 && result != expected2 {
-		t.Errorf("Expected '%s', got '%s'", expected, result)
+		t.Errorf("Expected '%s' or '%s', got '%s'", expected1, expected2, result)
 	}
 }
