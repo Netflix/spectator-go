@@ -153,10 +153,11 @@ func TestToSpectatorId_InvalidTags(t *testing.T) {
 		"tag2,;=": "value2,;=",
 	}
 
-	expected := "test______^____-_~______________.___foo,tag1___=value1___,tag2___=value2___"
+	expected1 := "test______^____-_~______________.___foo,tag1___=value1___,tag2___=value2___"
+	expected2 := "test______^____-_~______________.___foo,tag2___=value2___,tag1___=value1___"
 	result := toSpectatorId(name, tags)
 
-	if result != expected {
+	if result != expected1 && result != expected2 {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
 	}
 }
