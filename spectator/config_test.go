@@ -1,55 +1,10 @@
 package spectator
 
 import (
-	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"os"
 	"reflect"
 	"testing"
 )
-
-func TestNewRegistryConfiguredBy(t *testing.T) {
-	r, err := NewRegistryConfiguredBy("test_config.json")
-	if err != nil {
-		t.Fatal("Unable to get a registry", err)
-	}
-
-	logger := logger.NewDefaultLogger()
-	expectedConfig := Config{
-		Location:   "",
-		CommonTags: map[string]string{"nf.app": "app", "nf.account": "1234"},
-		Log:        logger,
-	}
-
-	// Set the same logger so that we can compare the configs
-	cfg := r.config
-	cfg.Log = logger
-
-	if !reflect.DeepEqual(&expectedConfig, cfg) {
-		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
-	}
-}
-
-func TestNewRegistryConfiguredBy_ExtraKeysAreIgnored(t *testing.T) {
-	r, err := NewRegistryConfiguredBy("test_config_extra_keys.json")
-	if err != nil {
-		t.Fatal("Unable to get a registry", err)
-	}
-
-	logger := logger.NewDefaultLogger()
-	expectedConfig := Config{
-		Location:   "",
-		CommonTags: map[string]string{"nf.app": "app", "nf.account": "1234"},
-		Log:        logger,
-	}
-
-	// Set the same logger so that we can compare the configs
-	cfg := r.config
-	cfg.Log = logger
-
-	if !reflect.DeepEqual(&expectedConfig, cfg) {
-		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
-	}
-}
 
 func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 	_ = os.Setenv("TITUS_CONTAINER_NAME", "container_name")
@@ -61,27 +16,23 @@ func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 		"nf.app":     "app",
 		"nf.account": "1234",
 	}
+
 	r, _ := NewRegistry(&Config{
 		CommonTags: tags,
 	})
 
-	logger := logger.NewDefaultLogger()
-	expectedConfig := Config{
-		CommonTags: map[string]string{
-			"nf.app":       "app",
-			"nf.account":   "1234",
-			"nf.container": "container_name",
-			"nf.process":   "process_name",
-		},
-		Log: logger,
+	meterId := r.NewId("test_id", nil)
+
+	// check that meter id has the expected tags
+	expectedTags := map[string]string{
+		"nf.app":       "app",
+		"nf.account":   "1234",
+		"nf.container": "container_name",
+		"nf.process":   "process_name",
 	}
 
-	// Set the same logger so that we can compare the configs
-	cfg := r.config
-	cfg.Log = logger
-
-	if !reflect.DeepEqual(&expectedConfig, cfg) {
-		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
+	if !reflect.DeepEqual(expectedTags, meterId.Tags()) {
+		t.Errorf("Expected tags %#v, got %#v", expectedTags, meterId.Tags())
 	}
 }
 
@@ -102,23 +53,18 @@ func TestConfigMergesCommonTagsWithEnvVariablesAndPassedInValues(t *testing.T) {
 		CommonTags: tags,
 	})
 
-	logger := logger.NewDefaultLogger()
-	expectedConfig := Config{
-		CommonTags: map[string]string{
-			"nf.app":       "app",
-			"nf.account":   "1234",
-			"nf.container": "passed_in_container",
-			"nf.process":   "passed_in_process",
-		},
-		Log: logger,
+	meterId := r.NewId("test_id", nil)
+
+	// check that meter id has the expected tags
+	expectedTags := map[string]string{
+		"nf.app":       "app",
+		"nf.account":   "1234",
+		"nf.container": "passed_in_container",
+		"nf.process":   "passed_in_process",
 	}
 
-	// Set the same logger so that we can compare the configs
-	cfg := r.config
-	cfg.Log = logger
-
-	if !reflect.DeepEqual(&expectedConfig, cfg) {
-		t.Errorf("Expected config %#v, got %#v", expectedConfig, cfg)
+	if !reflect.DeepEqual(expectedTags, meterId.Tags()) {
+		t.Errorf("Expected tags %#v, got %#v", expectedTags, meterId.Tags())
 	}
 }
 
