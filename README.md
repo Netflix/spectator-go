@@ -100,6 +100,11 @@ Logging is implemented with the standard Golang [slog package](https://pkg.go.de
 defines interfaces for [Debugf, Infof, and Errorf](./spectator/logger/logger.go). There are useful messages
 implemented at the Debug level which can help diagnose the metric publishing workflow.
 
+## Runtime Metrics
+
+Use [spectator-go-runtime-metrics](https://github.com/Netflix/spectator-go-runtime-metrics). Follow instructions
+in the [README](https://github.com/Netflix/spectator-go-runtime-metrics) to enable collection.
+
 ---
 
 ## Migrating from 0.X to 1.X
