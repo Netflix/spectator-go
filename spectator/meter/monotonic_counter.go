@@ -29,8 +29,10 @@ func (c *MonotonicCounter) MeterId() *Id {
 	return c.id
 }
 
-// Set is to set a specific uint64 value as the current measurement - spectatord will calculate the delta.
-func (c *MonotonicCounter) Set(value uint64) {
-	var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, value)
-	c.writer.Write(line)
+// Set is to set a specific int64 delta as the current measurement.
+func (c *MonotonicCounter) Set(delta int64) {
+	if delta > 0 {
+		var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, delta)
+		c.writer.Write(line)
+	}
 }

@@ -41,6 +41,17 @@ func TestAgeGauge_Now(t *testing.T) {
 	}
 }
 
+func TestAgeGauge_SetNegative(t *testing.T) {
+	id := NewId("setNegative", nil)
+	w := writer.MemoryWriter{}
+	g := NewAgeGauge(id, &w)
+	g.Set(-100)
+
+	if len(w.Lines) != 0 {
+		t.Error("Negative values should be ignored")
+	}
+}
+
 func TestAgeGauge_SetMultipleValues(t *testing.T) {
 	id := NewId("setMultiple", nil)
 	w := writer.MemoryWriter{}

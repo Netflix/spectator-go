@@ -47,4 +47,9 @@ func TestCounter_Add(t *testing.T) {
 	if w.Lines[0] != expected {
 		t.Error("Expected ", expected, " got ", w.Lines[0])
 	}
+
+	c.Add(-1)
+	if len(w.Lines) != 1 {
+		t.Error("Negative deltas should be ignored")
+	}
 }

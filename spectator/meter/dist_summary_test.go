@@ -29,6 +29,17 @@ func TestDistributionSummary_RecordZeroValue(t *testing.T) {
 	}
 }
 
+func TestDistributionSummary_RecordNegativeValue(t *testing.T) {
+	id := NewId("recordNegative", nil)
+	w := writer.MemoryWriter{}
+	ds := NewDistributionSummary(id, &w)
+	ds.Record(-100)
+
+	if len(w.Lines) != 0 {
+		t.Errorf("Expected no lines, got %d", len(w.Lines))
+	}
+}
+
 func TestDistributionSummary_RecordMultipleValues(t *testing.T) {
 	id := NewId("recordMultiple", nil)
 	w := writer.MemoryWriter{}
