@@ -29,18 +29,6 @@ func TestAgeGauge_SetZero(t *testing.T) {
 	}
 }
 
-func TestAgeGauge_Now(t *testing.T) {
-	id := NewId("now", nil)
-	w := writer.MemoryWriter{}
-	g := NewAgeGauge(id, &w)
-	g.Now()
-
-	expected := "A:now:0"
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
-	}
-}
-
 func TestAgeGauge_SetNegative(t *testing.T) {
 	id := NewId("setNegative", nil)
 	w := writer.MemoryWriter{}
@@ -65,5 +53,17 @@ func TestAgeGauge_SetMultipleValues(t *testing.T) {
 		if line != expectedLines[i] {
 			t.Errorf("Expected line to be %s, got %s", expectedLines[i], line)
 		}
+	}
+}
+
+func TestAgeGauge_Now(t *testing.T) {
+	id := NewId("now", nil)
+	w := writer.MemoryWriter{}
+	g := NewAgeGauge(id, &w)
+	g.Now()
+
+	expected := "A:now:0"
+	if w.Lines[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
 	}
 }

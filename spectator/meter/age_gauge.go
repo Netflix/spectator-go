@@ -28,15 +28,15 @@ func (g *AgeGauge) MeterId() *Id {
 	return g.id
 }
 
-// Set records the current value.
-func (g *AgeGauge) Set(value int64) {
-	if value >= 0 {
-		var line = fmt.Sprintf("%s:%s:%d", g.meterTypeSymbol, g.id.spectatordId, value)
+// Set records the current time in seconds since the epoch.
+func (g *AgeGauge) Set(seconds int64) {
+	if seconds >= 0 {
+		var line = fmt.Sprintf("%s:%s:%d", g.meterTypeSymbol, g.id.spectatordId, seconds)
 		g.writer.Write(line)
 	}
 }
 
-// Now records the current time in epoch seconds in spectatord.
+// Now records the current time in epoch seconds, using a spectatord feature.
 func (g *AgeGauge) Now() {
 	var line = fmt.Sprintf("%s:%s:0", g.meterTypeSymbol, g.id.spectatordId)
 	g.writer.Write(line)
