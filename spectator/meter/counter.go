@@ -34,18 +34,18 @@ func (c *Counter) Increment() {
 	c.writer.Write(line)
 }
 
-// AddFloat adds a specific float64 delta to the current measurement.
-func (c *Counter) AddFloat(delta float64) {
-	if delta > 0.0 {
-		var line = fmt.Sprintf("%s:%s:%f", c.meterTypeSymbol, c.id.spectatordId, delta)
+// Add adds an int64 delta to the current measurement.
+func (c *Counter) Add(delta int64) {
+	if delta > 0 {
+		var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, delta)
 		c.writer.Write(line)
 	}
 }
 
-// Add is to add a specific int64 delta to the current measurement.
-func (c *Counter) Add(delta int64) {
-	if delta > 0 {
-		var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, delta)
+// AddFloat adds a float64 delta to the current measurement.
+func (c *Counter) AddFloat(delta float64) {
+	if delta > 0.0 {
+		var line = fmt.Sprintf("%s:%s:%f", c.meterTypeSymbol, c.id.spectatordId, delta)
 		c.writer.Write(line)
 	}
 }
