@@ -29,7 +29,7 @@ func (d *DistributionSummary) MeterId() *Id {
 	return d.id
 }
 
-// Record records a new value to track within the distribution.
+// Record records a value to track within the distribution.
 func (d *DistributionSummary) Record(amount int64) {
 	if amount >= 0 {
 		var line = fmt.Sprintf("%s:%s:%d", d.meterTypeSymbol, d.id.spectatordId, amount)

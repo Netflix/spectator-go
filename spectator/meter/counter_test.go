@@ -18,24 +18,6 @@ func TestCounter_Increment(t *testing.T) {
 	}
 }
 
-func TestCounter_AddFloat(t *testing.T) {
-	w := writer.MemoryWriter{}
-	id := NewId("addFloat", nil)
-	c := NewCounter(id, &w)
-
-	c.AddFloat(4.2)
-
-	expected := "c:addFloat:4.200000"
-	if w.Lines[0] != expected {
-		t.Error("Expected ", expected, " got ", w.Lines[0])
-	}
-
-	c.AddFloat(-0.1)
-	if len(w.Lines) != 1 {
-		t.Error("Negative deltas should be ignored")
-	}
-}
-
 func TestCounter_Add(t *testing.T) {
 	w := writer.MemoryWriter{}
 	id := NewId("add", nil)
@@ -49,6 +31,24 @@ func TestCounter_Add(t *testing.T) {
 	}
 
 	c.Add(-1)
+	if len(w.Lines) != 1 {
+		t.Error("Negative deltas should be ignored")
+	}
+}
+
+func TestCounter_AddFloat(t *testing.T) {
+	w := writer.MemoryWriter{}
+	id := NewId("addFloat", nil)
+	c := NewCounter(id, &w)
+
+	c.AddFloat(4.2)
+
+	expected := "c:addFloat:4.200000"
+	if w.Lines[0] != expected {
+		t.Error("Expected ", expected, " got ", w.Lines[0])
+	}
+
+	c.AddFloat(-0.1)
 	if len(w.Lines) != 1 {
 		t.Error("Negative deltas should be ignored")
 	}
