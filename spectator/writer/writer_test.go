@@ -22,7 +22,7 @@ func TestValidOutputLocation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		result := ValidOutputLocation(tc.outputLocation)
+		result := IsValidOutputLocation(tc.outputLocation)
 		if result != tc.expected {
 			t.Errorf("Expected %v for output location '%s', got %v", tc.expected, tc.outputLocation, result)
 		}
