@@ -57,31 +57,19 @@ type spectatordRegistry struct {
 
 // NewRegistry generates a new registry from the config.
 //
-// If config.Log is unset, it defaults to using the default logger.
+// If config.log is unset, it defaults to using the default logger.
 func NewRegistry(config *Config) (Registry, error) {
-	log := config.Log
-	if log == nil {
-		log = logger.NewDefaultLogger()
-	}
-
-	mergedTags := tagsFromEnvVars()
-	// merge env var tags with config tags
-	for k, v := range config.CommonTags {
-		mergedTags[k] = v
-	}
-	config.CommonTags = mergedTags
-
-	newWriter, err := writer.NewWriter(config.GetLocation(), log)
+	newWriter, err := writer.NewWriter(config.location, config.log)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Infof("Initializing Registry using writer: %T", newWriter)
+	config.log.Infof("Initializing Registry using writer: %T", newWriter)
 
 	r := &spectatordRegistry{
 		config: config,
 		writer: newWriter,
-		logger: log,
+		logger: config.log,
 	}
 
 	return r, nil
@@ -92,12 +80,12 @@ func (r *spectatordRegistry) GetLogger() logger.Logger {
 	return r.logger
 }
 
-// NewId calls meters.NewId() and adds the CommonTags registered in the config.
+// NewId calls meters.NewId() and adds the commonTags registered in the config.
 func (r *spectatordRegistry) NewId(name string, tags map[string]string) *meter.Id {
 	newId := meter.NewId(name, tags)
 
-	if r.config.CommonTags != nil && len(r.config.CommonTags) > 0 {
-		newId = newId.WithTags(r.config.CommonTags)
+	if r.config.commonTags != nil && len(r.config.commonTags) > 0 {
+		newId = newId.WithTags(r.config.commonTags)
 	}
 
 	return newId

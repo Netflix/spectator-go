@@ -56,10 +56,7 @@ func (s *StderrWriter) Close() error {
 	return nil
 }
 
-func ValidOutputLocation(output string) bool {
-	if output == "" {
-		return false
-	}
+func IsValidOutputLocation(output string) bool {
 	return output == "none" ||
 		output == "memory" ||
 		output == "stdout" ||
@@ -80,7 +77,6 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 	case outputLocation == "stderr":
 		return &StderrWriter{}, nil
 	case strings.HasPrefix(outputLocation, "file://"):
-		// Remove the "file://" prefix to get the file path
 		filePath := strings.TrimPrefix(outputLocation, "file://")
 		return NewFileWriter(filePath, logger)
 	case strings.HasPrefix(outputLocation, "udp://"):

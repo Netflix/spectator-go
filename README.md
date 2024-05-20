@@ -131,8 +131,10 @@ Possible values are:
 - `unix:///path/to/socket`: Writes metrics to a Unix domain socket.
 - `udp://host:port`: Writes metrics to a UDP socket.
 
-Location can also be set through the environment variable `SPECTATOR_OUTPUT_LOCATION`. If both are set, the Config value
-takes precedence over the environment variable.
+Location can also be set through the environment variable `SPECTATOR_OUTPUT_LOCATION`. If both are set, the environment variable
+takes precedence over the passed config. 
+
+The environment variable `SPECTATOR_OUTPUT_LOCATION` can be set to `none` to disable metrics collection.
 
 #### Meters
 
@@ -149,6 +151,13 @@ Common tags are now automatically added to all Meters. Their values are read fro
 |--------------|----------------------|
 | nf.container | TITUS_CONTAINER_NAME |
 | nf.process   | NETFLIX_PROCESS_NAME |
+
+Tags from environment variables take precedence over tags passed on code when creating the `Config`. 
+
+#### Config
+
+- `Config` is now created through a constructor which throws error if the passed in parameters are not valid.
+- `Config` members are now private.
 
 ### Moved
 
@@ -178,6 +187,7 @@ Common tags are now automatically added to all Meters. Their values are read fro
 - `Percentile*` meters no longer support defining min/max values.
 - `spectator.Registry` no longer allows setting a different logger after creation. A custom logger can be set in the
   `spectator.Config` before creating the Registry.
+- File-based configuration is no longer supported.
 
 ### Migration steps
 
