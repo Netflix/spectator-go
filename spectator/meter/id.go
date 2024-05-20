@@ -2,7 +2,6 @@ package meter
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -25,8 +24,6 @@ var builderPool = &sync.Pool{
 		return &strings.Builder{}
 	},
 }
-
-var invalidCharacters = regexp.MustCompile(`[^-._A-Za-z0-9~^]`)
 
 // MapKey computes and saves a key within the struct to be used to uniquely
 // identify this *Id in a map. This does use the information from within the
@@ -165,13 +162,36 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 }
 
 func toSpectatorId(name string, tags map[string]string) string {
-	result := invalidCharacters.ReplaceAllString(name, "_")
+	result := replaceInvalidCharacters(name)
 
 	for k, v := range tags {
-		k = invalidCharacters.ReplaceAllString(k, "_")
-		v = invalidCharacters.ReplaceAllString(v, "_")
+		k = replaceInvalidCharacters(k)
+		v = replaceInvalidCharacters(v)
 		result += fmt.Sprintf(",%s=%s", k, v)
 	}
 
 	return result
+}
+
+func replaceInvalidCharacters(input string) string {
+	var result strings.Builder
+	for _, r := range input {
+		if !isValidCharacter(r) {
+			result.WriteRune('_')
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
+}
+
+func isValidCharacter(r rune) bool {
+	return (r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9') ||
+		r == '-' ||
+		r == '.' ||
+		r == '_' ||
+		r == '~' ||
+		r == '^'
 }
