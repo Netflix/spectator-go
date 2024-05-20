@@ -130,6 +130,22 @@ func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
 	}
 }
 
+func TestNewRegistryWithEmptyConfig(t *testing.T) {
+	_, err := NewRegistry(&Config{})
+
+	if err != nil {
+		t.Errorf("Registry should not return an error for empty config, got '%v'", err)
+	}
+}
+
+func TestNewRegistryWithNilConfig(t *testing.T) {
+	_, err := NewRegistry(nil)
+
+	if err == nil {
+		t.Errorf("Registry should return an error for nil config, got nil")
+	}
+}
+
 func NewTestRegistry(mw *writer.MemoryWriter) Registry {
 	return &spectatordRegistry{
 		config: &Config{},
