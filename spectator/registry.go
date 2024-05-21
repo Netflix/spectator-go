@@ -7,6 +7,7 @@
 package spectator
 
 import (
+	"fmt"
 	"github.com/Netflix/spectator-go/spectator/logger"
 	"github.com/Netflix/spectator-go/spectator/meter"
 	"github.com/Netflix/spectator-go/spectator/writer"
@@ -55,10 +56,17 @@ type spectatordRegistry struct {
 	logger logger.Logger
 }
 
-// NewRegistry generates a new registry from the config.
-//
-// If config.log is unset, it defaults to using the default logger.
+// NewRegistry generates a new registry from a passed Config created through NewConfig.
 func NewRegistry(config *Config) (Registry, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	if config.location == "" {
+		// Config was not created using NewConfig. Set a default config instead of using the passed one
+		config, _ = NewConfig("", nil, nil)
+	}
+
 	newWriter, err := writer.NewWriter(config.location, config.log)
 	if err != nil {
 		return nil, err

@@ -79,7 +79,7 @@ func getNextRequest() *Request {
 
 func main() {
 	commonTags := map[string]string{"nf.app": "example", "nf.region": "us-west-1"}
-	config := &spectator.Config{CommonTags: commonTags}
+	config, _ := spectator.NewConfig("", commonTags, nil)
 
 	registry, _ := spectator.NewRegistry(config)
 	defer registry.Close()
