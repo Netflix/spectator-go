@@ -78,7 +78,7 @@ func getNextRequest() *Request {
 }
 
 func main() {
-	commonTags := map[string]string{"nf.app": "example", "nf.region": "us-west-1"}
+	commonTags := map[string]string{"nf.platform": "my_platform", "process_name": "my_process"}
 	config, _ := spectator.NewConfig("", commonTags, nil)
 
 	registry, _ := spectator.NewRegistry(config)
@@ -152,7 +152,9 @@ Common tags are now automatically added to all Meters. Their values are read fro
 | nf.container | TITUS_CONTAINER_NAME |
 | nf.process   | NETFLIX_PROCESS_NAME |
 
-Tags from environment variables take precedence over tags passed on code when creating the `Config`. 
+Tags from environment variables take precedence over tags passed on code when creating the `Config`.
+
+Note that common tags sourced by [spectatord](https://github.com/Netflix-Skunkworks/spectatord) can't be overwritten.
 
 #### Config
 
