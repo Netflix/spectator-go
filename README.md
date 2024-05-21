@@ -20,8 +20,8 @@ There is one language feature used in the project which requires at least 1.21 -
 package main
 
 import (
-	"github.com/Netflix/spectator-go/spectator"
-	"github.com/Netflix/spectator-go/spectator/meter"
+	"github.com/Netflix/spectator-go/v2/spectator"
+	"github.com/Netflix/spectator-go/v2/spectator/meter"
 	"strconv"
 	"time"
 )
@@ -84,7 +84,7 @@ func main() {
 	registry, _ := spectator.NewRegistry(config)
 	defer registry.Close()
 
-	server := newServer(*registry)
+	server := newServer(registry)
 
 	for i := 1; i < 3; i++ {
 		// get a request
