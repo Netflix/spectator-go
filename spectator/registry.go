@@ -59,11 +59,11 @@ type spectatordRegistry struct {
 // NewRegistry generates a new registry from a passed Config created through NewConfig.
 func NewRegistry(config *Config) (Registry, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config is nil")
+		return nil, fmt.Errorf("config cannot be nil")
 	}
 
 	if config.location == "" {
-		// Config was not created using NewConfig. Set a default config instead using the passed one
+		// Config was not created using NewConfig. Set a default config instead of using the passed one
 		config, _ = NewConfig("", nil, nil)
 	}
 
