@@ -2,7 +2,7 @@ package spectator
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/spectator/meter"
+	"github.com/Netflix/spectator-go/v2/spectator/meter"
 	"strings"
 )
 

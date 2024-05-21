@@ -2,7 +2,7 @@ package meter
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/spectator/writer"
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
 // DistributionSummary is used to track the distribution of events. This is safe
