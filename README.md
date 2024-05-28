@@ -107,7 +107,7 @@ in the [README](https://github.com/Netflix/spectator-go-runtime-metrics) to enab
 
 ---
 
-## Migrating from 0.X to 1.X
+## Migrating from 0.X to 2.X
 
 Version 0.3 consists of a major rewrite that turns spectator-go into a thin client designed to send metrics through
 [spectatord](https://github.com/Netflix-Skunkworks/spectatord). As a result some functionality has been moved to other
