@@ -69,20 +69,27 @@ func IsValidOutputLocation(output string) bool {
 func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 	switch {
 	case outputLocation == "none":
+		logger.Infof("Initializing NoopWriter")
 		return &NoopWriter{}, nil
 	case outputLocation == "memory":
+		logger.Infof("Initializing MemoryWriter")
 		return &MemoryWriter{}, nil
 	case outputLocation == "stdout":
+		logger.Infof("Initializing StdoutWriter")
 		return &StdoutWriter{}, nil
 	case outputLocation == "stderr":
+		logger.Infof("Initializing StderrWriter")
 		return &StderrWriter{}, nil
 	case strings.HasPrefix(outputLocation, "file://"):
+		logger.Infof("Initializing FileWriter with path %s", outputLocation)
 		filePath := strings.TrimPrefix(outputLocation, "file://")
 		return NewFileWriter(filePath, logger)
 	case strings.HasPrefix(outputLocation, "udp://"):
+		logger.Infof("Initializing UdpWriter with address %s", outputLocation)
 		address := strings.TrimPrefix(outputLocation, "udp://")
 		return NewUdpWriter(address, logger)
 	case strings.HasPrefix(outputLocation, "unix://"):
+		logger.Infof("Initializing UnixgramWriter with path %s", outputLocation)
 		path := strings.TrimPrefix(outputLocation, "unix://")
 		return NewUnixgramWriter(path, logger)
 	default:

@@ -72,8 +72,6 @@ func NewRegistry(config *Config) (Registry, error) {
 		return nil, err
 	}
 
-	config.log.Infof("Initializing Registry using writer: %T", newWriter)
-
 	r := &spectatordRegistry{
 		config: config,
 		writer: newWriter,
