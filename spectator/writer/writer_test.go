@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -65,5 +66,29 @@ func TestNewWriter_EmptyOutputLocation(t *testing.T) {
 	_, err := NewWriter("", logger.NewDefaultLogger())
 	if err == nil {
 		t.Errorf("Expected error, got nil")
+	}
+}
+
+func TestMemoryWriter_Write(t *testing.T) {
+	w, err := NewWriter("memory", logger.NewDefaultLogger())
+	if err != nil {
+		t.Errorf("failed to create writer: %s", err)
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				w.Write("")
+			}
+		}()
+	}
+	wg.Wait()
+
+	linesWritten := len(w.(*MemoryWriter).Lines())
+	if linesWritten != 10000 {
+		t.Errorf("expected 10000 lines written to writer but found %d", linesWritten)
 	}
 }

@@ -14,8 +14,8 @@ func TestGauge_Set(t *testing.T) {
 	g.Set(100.1)
 
 	expected := "g:set:100.100000"
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
+	if w.Lines()[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines()[0])
 	}
 }
 
@@ -26,8 +26,8 @@ func TestGauge_SetZero(t *testing.T) {
 	g.Set(0)
 
 	expected := "g:setZero:0.000000"
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
+	if w.Lines()[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines()[0])
 	}
 }
 
@@ -38,8 +38,8 @@ func TestGauge_SetNegative(t *testing.T) {
 	g.Set(-100.1)
 
 	expected := "g:setNegative:-100.100000"
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
+	if w.Lines()[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines()[0])
 	}
 }
 
@@ -52,7 +52,7 @@ func TestGauge_SetMultipleValues(t *testing.T) {
 	g.Set(300.3)
 
 	expectedLines := []string{"g:setMultiple:100.100000", "g:setMultiple:200.200000", "g:setMultiple:300.300000"}
-	for i, line := range w.Lines {
+	for i, line := range w.Lines() {
 		if line != expectedLines[i] {
 			t.Errorf("Expected line to be %s, got %s", expectedLines[i], line)
 		}
@@ -67,7 +67,7 @@ func TestGaugeWithTTL_Set(t *testing.T) {
 	g.Set(100.1)
 
 	expected := fmt.Sprintf("g,%d:setWithTTL:100.100000", int(ttl.Seconds()))
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
+	if w.Lines()[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines()[0])
 	}
 }
