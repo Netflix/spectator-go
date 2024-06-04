@@ -32,6 +32,12 @@ func (m *MemoryWriter) Lines() []string {
 	return slices.Clone(m.lines)
 }
 
+func (m *MemoryWriter) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lines = []string{}
+}
+
 func (m *MemoryWriter) Close() error {
 	return nil
 }
