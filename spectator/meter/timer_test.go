@@ -16,7 +16,7 @@ func TestTimer_Record(t *testing.T) {
 	timer.Record(3001 * time.Millisecond)
 
 	expectedLines := []string{"t:recordTimer:1.000000", "t:recordTimer:2.000000", "t:recordTimer:3.000000", "t:recordTimer:3.001000"}
-	for i, line := range w.Lines {
+	for i, line := range w.Lines() {
 		if line != expectedLines[i] {
 			t.Errorf("Expected line to be %s, got %s", expectedLines[i], line)
 		}
@@ -30,8 +30,8 @@ func TestTimer_RecordZero(t *testing.T) {
 	timer.Record(0)
 
 	expected := "t:recordTimerZero:0.000000"
-	if w.Lines[0] != expected {
-		t.Errorf("Expected line to be %s, got %s", expected, w.Lines[0])
+	if w.Lines()[0] != expected {
+		t.Errorf("Expected line to be %s, got %s", expected, w.Lines()[0])
 	}
 }
 
@@ -41,7 +41,7 @@ func TestTimer_RecordNegative(t *testing.T) {
 	timer := NewTimer(id, &w)
 	timer.Record(-100 * time.Millisecond)
 
-	if len(w.Lines) != 0 {
+	if len(w.Lines()) != 0 {
 		t.Error("Negative durations should be ignored")
 	}
 }
@@ -59,7 +59,7 @@ func TestTimer_RecordMultipleValues(t *testing.T) {
 		"t:recordTimerMultiple:0.200000",
 		"t:recordTimerMultiple:0.300000",
 	}
-	for i, line := range w.Lines {
+	for i, line := range w.Lines() {
 		if line != expectedLines[i] {
 			t.Errorf("Expected line to be %s, got %s", expectedLines[i], line)
 		}

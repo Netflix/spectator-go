@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"os"
+	"slices"
 	"strings"
+	"sync"
 )
 
 // Writer that accepts SpectatorD line protocol.
@@ -14,11 +16,20 @@ type Writer interface {
 }
 
 type MemoryWriter struct {
-	Lines []string
+	lines []string
+	mu    sync.RWMutex
 }
 
 func (m *MemoryWriter) Write(line string) {
-	m.Lines = append(m.Lines, line)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lines = append(m.lines, line)
+}
+
+func (m *MemoryWriter) Lines() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return slices.Clone(m.lines)
 }
 
 func (m *MemoryWriter) Close() error {
