@@ -92,3 +92,31 @@ func TestMemoryWriter_Write(t *testing.T) {
 		t.Errorf("expected 10000 lines written to writer but found %d", linesWritten)
 	}
 }
+
+func TestMemoryWriter_Reset(t *testing.T) {
+	w, err := NewWriter("memory", logger.NewDefaultLogger())
+	if err != nil {
+		t.Errorf("failed to create writer: %s", err)
+	}
+	mw := w.(*MemoryWriter)
+
+	linesLength := len(mw.Lines())
+	if linesLength != 0 {
+		t.Errorf("expected 0 lines written to writer but found %d", linesLength)
+	}
+
+	mw.Write("")
+	mw.Write("")
+
+	linesLength = len(mw.Lines())
+	if linesLength != 2 {
+		t.Errorf("expected 2 lines written to writer but found %d", linesLength)
+	}
+
+	mw.Reset()
+
+	linesLength = len(mw.Lines())
+	if linesLength != 0 {
+		t.Errorf("expected 0 lines written to writer but found %d", linesLength)
+	}
+}
