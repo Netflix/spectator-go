@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-func TestMonotonicCounter_Set(t *testing.T) {
+func TestMonotonicCounterUint_Set(t *testing.T) {
 	w := writer.MemoryWriter{}
 	id := NewId("set", nil)
-	c := NewMonotonicCounter(id, &w)
+	c := NewMonotonicCounterUint(id, &w)
 
 	c.Set(4)
 
-	expected := "C:set:4.000000"
+	expected := "U:set:4"
 	if w.Lines()[0] != expected {
 		t.Error("Expected ", expected, " got ", w.Lines()[0])
 	}

@@ -23,26 +23,28 @@ type Meter interface {
 type Registry interface {
 	GetLogger() logger.Logger
 	NewId(name string, tags map[string]string) *meter.Id
+	AgeGauge(name string, tags map[string]string) *meter.AgeGauge
+	AgeGaugeWithId(id *meter.Id) *meter.AgeGauge
 	Counter(name string, tags map[string]string) *meter.Counter
 	CounterWithId(id *meter.Id) *meter.Counter
-	MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter
-	MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter
-	Timer(name string, tags map[string]string) *meter.Timer
-	TimerWithId(id *meter.Id) *meter.Timer
+	DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary
+	DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary
 	Gauge(name string, tags map[string]string) *meter.Gauge
 	GaugeWithId(id *meter.Id) *meter.Gauge
 	GaugeWithTTL(name string, tags map[string]string, ttl time.Duration) *meter.Gauge
 	GaugeWithIdWithTTL(id *meter.Id, ttl time.Duration) *meter.Gauge
-	AgeGauge(name string, tags map[string]string) *meter.AgeGauge
-	AgeGaugeWithId(id *meter.Id) *meter.AgeGauge
 	MaxGauge(name string, tags map[string]string) *meter.MaxGauge
 	MaxGaugeWithId(id *meter.Id) *meter.MaxGauge
-	DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary
-	DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary
+	MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter
+	MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter
+	MonotonicCounterUint(name string, tags map[string]string) *meter.MonotonicCounterUint
+	MonotonicCounterUintWithId(id *meter.Id) *meter.MonotonicCounterUint
 	PercentileDistributionSummary(name string, tags map[string]string) *meter.PercentileDistributionSummary
 	PercentileDistributionSummaryWithId(id *meter.Id) *meter.PercentileDistributionSummary
 	PercentileTimer(name string, tags map[string]string) *meter.PercentileTimer
 	PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer
+	Timer(name string, tags map[string]string) *meter.Timer
+	TimerWithId(id *meter.Id) *meter.Timer
 	GetWriter() writer.Writer
 	Close()
 }
@@ -97,8 +99,14 @@ func (r *spectatordRegistry) NewId(name string, tags map[string]string) *meter.I
 	return newId
 }
 
-// Counter calls NewId() with the name and tags, and then calls r.CounterWithId()
-// using that *Id.
+func (r *spectatordRegistry) AgeGauge(name string, tags map[string]string) *meter.AgeGauge {
+	return meter.NewAgeGauge(r.NewId(name, tags), r.writer)
+}
+
+func (r *spectatordRegistry) AgeGaugeWithId(id *meter.Id) *meter.AgeGauge {
+	return meter.NewAgeGauge(id, r.writer)
+}
+
 func (r *spectatordRegistry) Counter(name string, tags map[string]string) *meter.Counter {
 	return meter.NewCounter(r.NewId(name, tags), r.writer)
 }
@@ -107,24 +115,12 @@ func (r *spectatordRegistry) CounterWithId(id *meter.Id) *meter.Counter {
 	return meter.NewCounter(id, r.writer)
 }
 
-// MonotonicCounter calls NewId() with the name and tags, and then calls r.MonotonicCounterWithId()
-// using that *Id.
-func (r *spectatordRegistry) MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter {
-	return meter.NewMonotonicCounter(r.NewId(name, tags), r.writer)
+func (r *spectatordRegistry) DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary {
+	return meter.NewDistributionSummary(r.NewId(name, tags), r.writer)
 }
 
-func (r *spectatordRegistry) MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter {
-	return meter.NewMonotonicCounter(id, r.writer)
-}
-
-// Timer calls NewId() with the name and tags, and then calls r.TimerWithId() using that *Id.
-func (r *spectatordRegistry) Timer(name string, tags map[string]string) *meter.Timer {
-	return meter.NewTimer(r.NewId(name, tags), r.writer)
-}
-
-// TimerWithId returns a new *Timer, using the provided meter identifier.
-func (r *spectatordRegistry) TimerWithId(id *meter.Id) *meter.Timer {
-	return meter.NewTimer(id, r.writer)
+func (r *spectatordRegistry) DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary {
+	return meter.NewDistributionSummary(id, r.writer)
 }
 
 func (r *spectatordRegistry) Gauge(name string, tags map[string]string) *meter.Gauge {
@@ -143,14 +139,6 @@ func (r *spectatordRegistry) GaugeWithIdWithTTL(id *meter.Id, duration time.Dura
 	return meter.NewGaugeWithTTL(id, r.writer, duration)
 }
 
-func (r *spectatordRegistry) AgeGauge(name string, tags map[string]string) *meter.AgeGauge {
-	return meter.NewAgeGauge(r.NewId(name, tags), r.writer)
-}
-
-func (r *spectatordRegistry) AgeGaugeWithId(id *meter.Id) *meter.AgeGauge {
-	return meter.NewAgeGauge(id, r.writer)
-}
-
 func (r *spectatordRegistry) MaxGauge(name string, tags map[string]string) *meter.MaxGauge {
 	return meter.NewMaxGauge(r.NewId(name, tags), r.writer)
 }
@@ -159,12 +147,20 @@ func (r *spectatordRegistry) MaxGaugeWithId(id *meter.Id) *meter.MaxGauge {
 	return meter.NewMaxGauge(id, r.writer)
 }
 
-func (r *spectatordRegistry) DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary {
-	return meter.NewDistributionSummary(r.NewId(name, tags), r.writer)
+func (r *spectatordRegistry) MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter {
+	return meter.NewMonotonicCounter(r.NewId(name, tags), r.writer)
 }
 
-func (r *spectatordRegistry) DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary {
-	return meter.NewDistributionSummary(id, r.writer)
+func (r *spectatordRegistry) MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter {
+	return meter.NewMonotonicCounter(id, r.writer)
+}
+
+func (r *spectatordRegistry) MonotonicCounterUint(name string, tags map[string]string) *meter.MonotonicCounterUint {
+	return meter.NewMonotonicCounterUint(r.NewId(name, tags), r.writer)
+}
+
+func (r *spectatordRegistry) MonotonicCounterUintWithId(id *meter.Id) *meter.MonotonicCounterUint {
+	return meter.NewMonotonicCounterUint(id, r.writer)
 }
 
 func (r *spectatordRegistry) PercentileDistributionSummary(name string, tags map[string]string) *meter.PercentileDistributionSummary {
@@ -181,6 +177,14 @@ func (r *spectatordRegistry) PercentileTimer(name string, tags map[string]string
 
 func (r *spectatordRegistry) PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer {
 	return meter.NewPercentileTimer(id, r.writer)
+}
+
+func (r *spectatordRegistry) Timer(name string, tags map[string]string) *meter.Timer {
+	return meter.NewTimer(r.NewId(name, tags), r.writer)
+}
+
+func (r *spectatordRegistry) TimerWithId(id *meter.Id) *meter.Timer {
+	return meter.NewTimer(id, r.writer)
 }
 
 func (r *spectatordRegistry) GetWriter() writer.Writer {
