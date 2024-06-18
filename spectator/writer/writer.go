@@ -79,7 +79,8 @@ func IsValidOutputLocation(output string) bool {
 		output == "stdout" ||
 		output == "stderr" ||
 		strings.HasPrefix(output, "file://") ||
-		strings.HasPrefix(output, "udp://")
+		strings.HasPrefix(output, "udp://") ||
+		strings.HasPrefix(output, "unix://")
 }
 
 // NewWriter Create a new writer based on the GetLocation string provided
