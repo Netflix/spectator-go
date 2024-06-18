@@ -19,6 +19,7 @@ func TestValidOutputLocation(t *testing.T) {
 		{"stderr", true},
 		{"file://testfile.txt", true},
 		{"udp://localhost:1234", true},
+		{"unix:///tmp/socket.sock", true},
 		{"invalid", false},
 	}
 
@@ -41,6 +42,7 @@ func TestNewWriter(t *testing.T) {
 		{"stderr", "*writer.StderrWriter"},
 		{"file://testfile.txt", "*writer.FileWriter"},
 		{"udp://localhost:5000", "*writer.UdpWriter"},
+		{"unix:///tmp/socket.sock", "*writer.UnixgramWriter"},
 	}
 
 	for _, tc := range testCases {
