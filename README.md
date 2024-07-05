@@ -79,6 +79,7 @@ func getNextRequest() *Request {
 
 func main() {
 	commonTags := map[string]string{"nf.platform": "my_platform", "process_name": "my_process"}
+	// if desired, replace the logger with a custom one, using the third parameter here:
 	config, _ := spectator.NewConfig("", commonTags, nil)
 
 	registry, _ := spectator.NewRegistry(config)

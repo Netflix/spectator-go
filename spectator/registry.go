@@ -22,7 +22,6 @@ type Meter interface {
 // Registry is the main entry point for interacting with the Spectator library.
 type Registry interface {
 	GetLogger() logger.Logger
-	SetLogger(logger logger.Logger)
 	NewId(name string, tags map[string]string) *meter.Id
 	AgeGauge(name string, tags map[string]string) *meter.AgeGauge
 	AgeGaugeWithId(id *meter.Id) *meter.AgeGauge
@@ -62,11 +61,11 @@ type spectatordRegistry struct {
 // NewRegistry generates a new registry from a passed Config created through NewConfig.
 func NewRegistry(config *Config) (Registry, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config cannot be nil")
+		return nil, fmt.Errorf("Config cannot be nil")
 	}
 
 	if config.location == "" {
-		// Config was not created using NewConfig. Set a default config instead of using the passed one
+		// Config was not created using NewConfig. Set a default config instead of using the passed one.
 		config, _ = NewConfig("", nil, nil)
 	}
 
@@ -74,6 +73,8 @@ func NewRegistry(config *Config) (Registry, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	config.log.Infof("Create Registry with extra commonTags=%v", config.commonTags)
 
 	r := &spectatordRegistry{
 		config: config,
@@ -87,11 +88,6 @@ func NewRegistry(config *Config) (Registry, error) {
 // GetLogger returns the internal logger.
 func (r *spectatordRegistry) GetLogger() logger.Logger {
 	return r.logger
-}
-
-// SetLogger overrides the internal logger.
-func (r *spectatordRegistry) SetLogger(logger logger.Logger) {
-	r.logger = logger
 }
 
 // NewId calls meters.NewId() and adds the commonTags registered in the config.
@@ -198,9 +194,9 @@ func (r *spectatordRegistry) GetWriter() writer.Writer {
 }
 
 func (r *spectatordRegistry) Close() {
+	r.GetLogger().Infof("Close Registry Writer")
 	err := r.writer.Close()
-
 	if err != nil {
-		r.GetLogger().Errorf("Error closing writer: %v", err)
+		r.GetLogger().Errorf("Error closing Registry Writer: %v", err)
 	}
 }
