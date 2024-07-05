@@ -22,6 +22,7 @@ type Meter interface {
 // Registry is the main entry point for interacting with the Spectator library.
 type Registry interface {
 	GetLogger() logger.Logger
+	SetLogger(logger logger.Logger)
 	NewId(name string, tags map[string]string) *meter.Id
 	AgeGauge(name string, tags map[string]string) *meter.AgeGauge
 	AgeGaugeWithId(id *meter.Id) *meter.AgeGauge
@@ -86,6 +87,11 @@ func NewRegistry(config *Config) (Registry, error) {
 // GetLogger returns the internal logger.
 func (r *spectatordRegistry) GetLogger() logger.Logger {
 	return r.logger
+}
+
+// SetLogger overrides the internal logger.
+func (r *spectatordRegistry) SetLogger(logger logger.Logger) {
+	r.logger = logger
 }
 
 // NewId calls meters.NewId() and adds the commonTags registered in the config.
