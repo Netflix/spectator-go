@@ -86,16 +86,6 @@ func TestId_Accessors(t *testing.T) {
 	}
 }
 
-func TestId_WithDefaultStat(t *testing.T) {
-	id1 := NewId("c", map[string]string{"statistic": "baz"})
-	id2 := id1.WithDefaultStat("counter")
-
-	if id2.Tags()["statistic"] != "baz" {
-		t.Errorf("Default stat should reuse the existing statistic. Got %s instead of baz",
-			id2.Tags()["statistic"])
-	}
-}
-
 func TestId_WithTags(t *testing.T) {
 	id1 := NewId("c", map[string]string{"statistic": "baz", "a": "b"})
 	id2 := id1.WithTags(map[string]string{"statistic": "foo", "k": "v"})
@@ -106,14 +96,6 @@ func TestId_WithTags(t *testing.T) {
 
 	if !reflect.DeepEqual(expected, id2.Tags()) {
 		t.Errorf("Expected %v, got %v tags", expected, id2.Tags())
-	}
-}
-
-func TestId_WithStat(t *testing.T) {
-	id1 := NewId("c", nil)
-	id2 := id1.WithStat("stuff")
-	if id2.String() != "Id{name=c,tags=map[statistic:stuff]}" {
-		t.Errorf("Got %s", id2.String())
 	}
 }
 
