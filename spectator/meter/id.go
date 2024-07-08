@@ -107,25 +107,6 @@ func (id *Id) WithTag(key string, value string) *Id {
 	return NewId(id.name, newTags)
 }
 
-// WithStat is id.WithTag("statistic", stat). See that method's documentation
-// for more info.
-func (id *Id) WithStat(stat string) *Id {
-	return id.WithTag("statistic", stat)
-}
-
-// WithDefaultStat is effectively the WithStat() method, except it only creates
-// the deep copy if the "statistic" tag is not set or is set to empty string. If
-// the "statistic" tag is already present, the *Id is returned without being
-// copied.
-func (id *Id) WithDefaultStat(stat string) *Id {
-	s := id.tags["statistic"]
-	if s == "" {
-		return id.WithTag("statistic", stat)
-	} else {
-		return id
-	}
-}
-
 func (id *Id) String() string {
 	return fmt.Sprintf("Id{name=%s,tags=%v}", id.name, id.tags)
 }
