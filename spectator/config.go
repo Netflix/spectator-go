@@ -14,17 +14,25 @@ type Config struct {
 	log        logger.Logger
 }
 
-// NewConfig creates a new configuration with the provided location, common tags, and logger. All fields are optional.
-// Possible values for location are:
-//   - `none`: Configures a no-op writer that does nothing. Can be used to disable metrics collection.
-//   - `stdout`: Writes metrics to stdout.
-//   - `stderr`: Writes metrics to stderr.
-//   - `memory`: Writes metrics to memory. Useful for testing.
-//   - `file:///path/to/file`: Writes metrics to a file.
-//   - `unix:///path/to/socket`: Writes metrics to a Unix domain socket.
-//   - `udp://host:port`: Writes metrics to a UDP socket.
+// NewConfig creates a new configuration with the provided location, extra common tags, and logger. All fields are
+// optional. The extra common tags are added to every metric, outside the common tags provided by spectatord.
 //
-// If location is not provided, the default value `udp://127.0.0.1:1234` will be used
+// Possible values for location are:
+//
+//   - `none`   - Configure a no-op writer that does nothing. Can be used to disable metrics collection.
+//   - `memory` - Write metrics to memory. Useful for testing.
+//   - `stderr` - Write metrics to standard error.
+//   - `stdout` - Write metrics to standard output.
+//   - `unix`   - Write metrics to the default Unix Domain Socket. Useful for high-volume scenarios.
+//   - `file:///path/to/file`   - Write metrics to a file.
+//   - `udp://host:port`        - Write metrics to a UDP socket.
+//   - `unix:///path/to/socket` - Write metrics to a Unix Domain Socket.
+//
+// If a location is not provided, or it is an empty string, then the default location of `udp://127.0.0.1:1234` will
+// be used.
+//
+// The output location can be overridden by configuring an environment variable SPECTATOR_OUTPUT_LOCATION
+// with one of the values listed above. Overriding the output location may be useful for integration testing.
 func NewConfig(
 	location string, // defaults to `udp://127.0.0.1:1234`
 	commonTags map[string]string, // defaults to empty map
@@ -58,25 +66,24 @@ func calculateCommonTags(commonTags map[string]string) map[string]string {
 	mergedTags := make(map[string]string)
 
 	for k, v := range commonTags {
-		// Atlas doesn't support empty values for tags
-		if v != "" {
+		// tag keys and values may not be empty strings
+		if k != "" && v != "" {
 			mergedTags[k] = v
 		}
 	}
 
-	// merge common tags with env var tags. Env var tags take precedence
+	// merge common tags with env var tags; env var tags take precedence
 	for k, v := range tagsFromEnvVars() {
-		// Atlas doesn't support empty values for tags
-		if v != "" {
-			mergedTags[k] = v
-		}
+		// env tags are validated to be non-empty
+		mergedTags[k] = v
 	}
+
 	return mergedTags
 }
 
 func calculateLocation(location string) (string, error) {
 	if location != "" && !writer.IsValidOutputLocation(location) {
-		return "", fmt.Errorf("invalid spectatord location: %s", location)
+		return "", fmt.Errorf("invalid spectatord output location: %s", location)
 	}
 
 	if override, ok := os.LookupEnv("SPECTATOR_OUTPUT_LOCATION"); ok {
@@ -86,7 +93,7 @@ func calculateLocation(location string) (string, error) {
 		location = override
 	}
 
-	if location == "" { // use the default if there is no location or override
+	if location == "" { // use the default, if there is no location or override
 		location = "udp://127.0.0.1:1234"
 	}
 

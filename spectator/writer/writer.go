@@ -98,6 +98,11 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 	case outputLocation == "stderr":
 		logger.Infof("Initializing StderrWriter")
 		return &StderrWriter{}, nil
+	case outputLocation == "unix":
+		outputLocation = "unix:///run/spectatord/spectatord.unix"
+		logger.Infof("Initializing UnixgramWriter with path %s", outputLocation)
+		path := strings.TrimPrefix(outputLocation, "unix://")
+		return NewUnixgramWriter(path, logger)
 	case strings.HasPrefix(outputLocation, "file://"):
 		logger.Infof("Initializing FileWriter with path %s", outputLocation)
 		filePath := strings.TrimPrefix(outputLocation, "file://")
