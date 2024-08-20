@@ -78,6 +78,7 @@ func IsValidOutputLocation(output string) bool {
 		output == "memory" ||
 		output == "stdout" ||
 		output == "stderr" ||
+		output == "unix" ||
 		strings.HasPrefix(output, "file://") ||
 		strings.HasPrefix(output, "udp://") ||
 		strings.HasPrefix(output, "unix://")
