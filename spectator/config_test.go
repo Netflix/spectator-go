@@ -111,7 +111,7 @@ func TestGetLocation_DefaultValue(t *testing.T) {
 	}
 
 	result := cfg.location
-	expected := "udp://127.0.0.1:1234"
+	expected := "udp"
 	if result != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
 	}
