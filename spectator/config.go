@@ -19,22 +19,21 @@ type Config struct {
 //
 // Possible values for location are:
 //
+//   - `""`     - Empty string will default to `udp`.
 //   - `none`   - Configure a no-op writer that does nothing. Can be used to disable metrics collection.
 //   - `memory` - Write metrics to memory. Useful for testing.
 //   - `stderr` - Write metrics to standard error.
 //   - `stdout` - Write metrics to standard output.
-//   - `unix`   - Write metrics to the default Unix Domain Socket. Useful for high-volume scenarios.
+//   - `udp`    - Write metrics to the default spectatord UDP port. This is the default value.
+//   - `unix`   - Write metrics to the default spectatord Unix Domain Socket. Useful for high-volume scenarios.
 //   - `file:///path/to/file`   - Write metrics to a file.
 //   - `udp://host:port`        - Write metrics to a UDP socket.
 //   - `unix:///path/to/socket` - Write metrics to a Unix Domain Socket.
 //
-// If a location is not provided, or it is an empty string, then the default location of `udp://127.0.0.1:1234` will
-// be used.
-//
 // The output location can be overridden by configuring an environment variable SPECTATOR_OUTPUT_LOCATION
 // with one of the values listed above. Overriding the output location may be useful for integration testing.
 func NewConfig(
-	location string, // defaults to `udp://127.0.0.1:1234`
+	location string, // defaults to `udp`
 	commonTags map[string]string, // defaults to empty map
 	log logger.Logger, // defaults to default logger
 ) (*Config, error) {
@@ -94,7 +93,7 @@ func calculateLocation(location string) (string, error) {
 	}
 
 	if location == "" { // use the default, if there is no location or override
-		location = "udp://127.0.0.1:1234"
+		location = "udp"
 	}
 
 	return location, nil

@@ -99,7 +99,14 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 	case outputLocation == "stderr":
 		logger.Infof("Initializing StderrWriter")
 		return &StderrWriter{}, nil
+	case outputLocation == "udp":
+		// default udp port for spectatord
+		outputLocation = "udp://127.0.0.1:1234"
+		logger.Infof("Initializing UdpWriter with address %s", outputLocation)
+		address := strings.TrimPrefix(outputLocation, "udp://")
+		return NewUdpWriter(address, logger)
 	case outputLocation == "unix":
+		// default unix domain socket for spectatord
 		outputLocation = "unix:///run/spectatord/spectatord.unix"
 		logger.Infof("Initializing UnixgramWriter with path %s", outputLocation)
 		path := strings.TrimPrefix(outputLocation, "unix://")
