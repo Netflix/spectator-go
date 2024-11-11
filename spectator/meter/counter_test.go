@@ -23,15 +23,21 @@ func TestCounter_Add(t *testing.T) {
 	id := NewId("add", nil)
 	c := NewCounter(id, &w)
 
-	c.Add(4)
+	c.Add(1)
 
-	expected := "c:add:4"
+	expected := "c:add:1"
 	if w.Lines()[0] != expected {
 		t.Error("Expected ", expected, " got ", w.Lines()[0])
 	}
+	c.Add(4)
+
+	expected = "c:add:4"
+	if w.Lines()[1] != expected {
+		t.Error("Expected ", expected, " got ", w.Lines()[1])
+	}
 
 	c.Add(-1)
-	if len(w.Lines()) != 1 {
+	if len(w.Lines()) != 2 {
 		t.Error("Negative deltas should be ignored")
 	}
 }
