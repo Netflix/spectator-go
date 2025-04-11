@@ -74,7 +74,7 @@ func NewRegistry(config *Config) (Registry, error) {
 		return nil, err
 	}
 
-	config.log.Infof("Create Registry with extra commonTags=%v", config.commonTags)
+	config.log.Infof("Create Registry with extraCommonTags=%v", config.extraCommonTags)
 
 	r := &spectatordRegistry{
 		config: config,
@@ -90,12 +90,12 @@ func (r *spectatordRegistry) GetLogger() logger.Logger {
 	return r.logger
 }
 
-// NewId calls meters.NewId() and adds the commonTags registered in the config.
+// NewId calls meters.NewId() and adds the extraCommonTags registered in the config.
 func (r *spectatordRegistry) NewId(name string, tags map[string]string) *meter.Id {
 	newId := meter.NewId(name, tags)
 
-	if r.config.commonTags != nil && len(r.config.commonTags) > 0 {
-		newId = newId.WithTags(r.config.commonTags)
+	if r.config.extraCommonTags != nil && len(r.config.extraCommonTags) > 0 {
+		newId = newId.WithTags(r.config.extraCommonTags)
 	}
 
 	return newId
