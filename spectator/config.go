@@ -15,7 +15,7 @@ type Config struct {
 }
 
 // NewConfig creates a new configuration with the provided location, extra common tags, and logger. All fields are
-// optional. The extra common tags are added to every metric, outside the common tags provided by spectatord.
+// optional. The extra common tags are added to every metric, on top of the common tags provided by spectatord.
 //
 // Possible values for location are:
 //
@@ -34,7 +34,7 @@ type Config struct {
 // with one of the values listed above. Overriding the output location may be useful for integration testing.
 func NewConfig(
 	location string, // defaults to `udp`
-	commonTags map[string]string, // defaults to empty map
+	extraCommonTags map[string]string, // defaults to empty map
 	log logger.Logger, // defaults to default logger
 ) (*Config, error) {
 	location, err := calculateLocation(location)
@@ -42,7 +42,7 @@ func NewConfig(
 		return nil, err
 	}
 
-	mergedTags := calculateCommonTags(commonTags)
+	mergedTags := calculateExtraCommonTags(extraCommonTags)
 
 	lg := calculateLogger(log)
 
@@ -61,17 +61,17 @@ func calculateLogger(log logger.Logger) logger.Logger {
 	return lg
 }
 
-func calculateCommonTags(commonTags map[string]string) map[string]string {
+func calculateExtraCommonTags(extraCommonTags map[string]string) map[string]string {
 	mergedTags := make(map[string]string)
 
-	for k, v := range commonTags {
+	for k, v := range extraCommonTags {
 		// tag keys and values may not be empty strings
 		if k != "" && v != "" {
 			mergedTags[k] = v
 		}
 	}
 
-	// merge common tags with env var tags; env var tags take precedence
+	// merge extra common tags with select env var tags; env var tags take precedence
 	for k, v := range tagsFromEnvVars() {
 		// env tags are validated to be non-empty
 		mergedTags[k] = v
