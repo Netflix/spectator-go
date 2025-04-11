@@ -9,9 +9,9 @@ import (
 
 // Config represents the Registry's configuration.
 type Config struct {
-	location   string
-	commonTags map[string]string
-	log        logger.Logger
+	location        string
+	extraCommonTags map[string]string
+	log             logger.Logger
 }
 
 // NewConfig creates a new configuration with the provided location, extra common tags, and logger. All fields are
@@ -47,9 +47,9 @@ func NewConfig(
 	lg := calculateLogger(log)
 
 	return &Config{
-		location:   location,
-		commonTags: mergedTags,
-		log:        lg,
+		location:        location,
+		extraCommonTags: mergedTags,
+		log:             lg,
 	}, nil
 }
 
