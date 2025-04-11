@@ -19,6 +19,10 @@ func addNonEmpty(tags map[string]string, tag string, envVars ...string) {
 	}
 }
 
+// tagsFromEnvVars Extract common infrastructure tags from the Netflix environment variables.
+//
+// The extracted variables are specific to a process and thus cannot be managed by a shared
+// SpectatorD instance.
 func tagsFromEnvVars() map[string]string {
 	tags := make(map[string]string)
 	addNonEmpty(tags, "nf.container", "TITUS_CONTAINER_NAME")
