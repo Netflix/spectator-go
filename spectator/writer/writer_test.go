@@ -17,6 +17,7 @@ func TestValidOutputLocation(t *testing.T) {
 		{"memory", true},
 		{"stdout", true},
 		{"stderr", true},
+		{"udp", true},
 		{"unix", true},
 		{"file://testfile.txt", true},
 		{"udp://localhost:1234", true},
