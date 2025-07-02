@@ -69,7 +69,7 @@ func NewRegistry(config *Config) (Registry, error) {
 		config, _ = NewConfig("", nil, nil)
 	}
 
-	newWriter, err := writer.NewWriter(config.location, config.log)
+	newWriter, err := writer.NewWriterWithBuffer(config.location, config.log, config.bufferSize)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (r *spectatordRegistry) GetLogger() logger.Logger {
 func (r *spectatordRegistry) NewId(name string, tags map[string]string) *meter.Id {
 	newId := meter.NewId(name, tags)
 
-	if r.config.extraCommonTags != nil && len(r.config.extraCommonTags) > 0 {
+	if len(r.config.extraCommonTags) > 0 {
 		newId = newId.WithTags(r.config.extraCommonTags)
 	}
 

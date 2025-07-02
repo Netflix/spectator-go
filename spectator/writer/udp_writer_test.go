@@ -102,6 +102,40 @@ func TestUdpWriter_Write(t *testing.T) {
 	}
 }
 
+func TestUdpWriterWithBuffer_Write(t *testing.T) {
+	// Start a local UDP server
+	pc, err := net.ListenPacket("udp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Could not start UDP server: %v", err)
+	}
+	defer pc.Close()
+
+	// Create a new UDP writer
+	writer, err := NewUdpWriterWithBuffer(pc.LocalAddr().String(), logger.NewDefaultLogger(), 20)
+	if err != nil {
+		t.Fatalf("Could not create UDP writer: %v", err)
+	}
+
+	// Write messages and overflow the buffer, to trigger a flush
+	writer.Write("message1")
+	writer.Write("message2")
+	writer.Write("message3")
+
+	// Read the message from the UDP server
+	buffer := make([]byte, 30)
+	_ = pc.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
+	n, _, err := pc.ReadFrom(buffer)
+	if err != nil {
+		t.Fatalf("Could not read from UDP server: %v", err)
+	}
+
+	// Check the message
+	expected := "message1\nmessage2\nmessage3"
+	if string(buffer[:n]) != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, string(buffer[:n]))
+	}
+}
+
 func TestConcurrentWrites(t *testing.T) {
 	messagesPerThread := 1000
 	writerThreadCount := 4
