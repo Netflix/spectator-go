@@ -87,6 +87,11 @@ func IsValidOutputLocation(output string) bool {
 
 // NewWriter Create a new writer based on the GetLocation string provided
 func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
+	return NewWriterWithBuffer(outputLocation, logger, 0)
+}
+
+// NewWriterWithBuffer Create a new writer with buffer support
+func NewWriterWithBuffer(outputLocation string, logger logger.Logger, bufferSize int) (Writer, error) {
 	switch {
 	case outputLocation == "none":
 		logger.Infof("Initializing NoopWriter")
@@ -105,13 +110,13 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 		outputLocation = "udp://127.0.0.1:1234"
 		logger.Infof("Initializing UdpWriter with address %s", outputLocation)
 		address := strings.TrimPrefix(outputLocation, "udp://")
-		return NewUdpWriter(address, logger)
+		return NewUdpWriterWithBuffer(address, logger, bufferSize)
 	case outputLocation == "unix":
 		// default unix domain socket for spectatord
 		outputLocation = "unix:///run/spectatord/spectatord.unix"
 		logger.Infof("Initializing UnixgramWriter with path %s", outputLocation)
 		path := strings.TrimPrefix(outputLocation, "unix://")
-		return NewUnixgramWriter(path, logger)
+		return NewUnixgramWriterWithBuffer(path, logger, bufferSize)
 	case strings.HasPrefix(outputLocation, "file://"):
 		logger.Infof("Initializing FileWriter with path %s", outputLocation)
 		filePath := strings.TrimPrefix(outputLocation, "file://")
@@ -119,11 +124,11 @@ func NewWriter(outputLocation string, logger logger.Logger) (Writer, error) {
 	case strings.HasPrefix(outputLocation, "udp://"):
 		logger.Infof("Initializing UdpWriter with address %s", outputLocation)
 		address := strings.TrimPrefix(outputLocation, "udp://")
-		return NewUdpWriter(address, logger)
+		return NewUdpWriterWithBuffer(address, logger, bufferSize)
 	case strings.HasPrefix(outputLocation, "unix://"):
 		logger.Infof("Initializing UnixgramWriter with path %s", outputLocation)
 		path := strings.TrimPrefix(outputLocation, "unix://")
-		return NewUnixgramWriter(path, logger)
+		return NewUnixgramWriterWithBuffer(path, logger, bufferSize)
 	default:
 		return nil, fmt.Errorf("unknown output location: %s", outputLocation)
 	}
