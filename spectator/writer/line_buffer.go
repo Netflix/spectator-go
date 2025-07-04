@@ -7,18 +7,23 @@ import (
 	"time"
 )
 
+// 60KB, to account for 64KB socket buffer size
+const chunkSize = 60 * 1024
+
 type LineBuffer struct {
 	writer       Writer
 	bufferSize   int
 	flushTimeout time.Duration
 	logger       logger.Logger
-	
-	mu         sync.Mutex
-	buffer     strings.Builder
-	lineCount  int
-	lastFlush  time.Time
-	flushTimer *time.Timer
-	closed     bool
+
+	mu          sync.Mutex
+	builder     strings.Builder
+	buffers     []string
+	currentSize int
+	lineCount   int
+	lastFlush   time.Time
+	flushTimer  *time.Timer
+	closed      bool
 }
 
 func NewLineBuffer(writer Writer, bufferSize int, logger logger.Logger, timeoutOptional ...time.Duration) *LineBuffer {
@@ -30,6 +35,7 @@ func NewLineBuffer(writer Writer, bufferSize int, logger logger.Logger, timeoutO
 	lb := &LineBuffer{
 		writer:       writer,
 		bufferSize:   bufferSize,
+		currentSize:  0,
 		flushTimeout: timeout,
 		logger:       logger,
 		lastFlush:    time.Now(),
@@ -41,25 +47,33 @@ func NewLineBuffer(writer Writer, bufferSize int, logger logger.Logger, timeoutO
 }
 
 func (lb *LineBuffer) Write(line string) {
-	if lb.bufferSize <= 0 {
-		lb.writer.Write(line)
-		return
-	}
-	
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
-	
+
 	if lb.closed {
 		return
 	}
-	
-	if lb.buffer.Len() > 0 {
-		lb.buffer.WriteString("\n")
+
+	if lb.builder.Len() > 0 {
+		lb.builder.WriteString("\n")
 	}
-	lb.buffer.WriteString(line)
+	lb.builder.WriteString(line)
 	lb.lineCount++
-	
-	if lb.buffer.Len() >= lb.bufferSize {
+
+	if lb.bufferSize <= chunkSize {
+		if lb.builder.Len() >= lb.bufferSize {
+			lb.flushBuilderLocked()
+		}
+		return
+	}
+
+	if lb.builder.Len() >= chunkSize {
+		lb.buffers = append(lb.buffers, lb.builder.String())
+		lb.currentSize += lb.builder.Len()
+		lb.builder.Reset()
+	}
+
+	if lb.currentSize + lb.builder.Len() >= lb.bufferSize {
 		lb.flushLocked()
 	}
 }
@@ -68,21 +82,26 @@ func (lb *LineBuffer) Close() error {
 	if lb.bufferSize <= 0 {
 		return lb.writer.Close()
 	}
-	
+
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
-	
+
 	if lb.closed {
 		return nil
 	}
-	
+
 	lb.closed = true
-	
+
 	if lb.flushTimer != nil {
 		lb.flushTimer.Stop()
 	}
-	
-	lb.flushLocked()
+
+	if lb.bufferSize <= chunkSize {
+		lb.flushBuilderLocked()
+	} else {
+		lb.flushLocked()
+	}
+
 	return lb.writer.Close()
 }
 
@@ -93,26 +112,51 @@ func (lb *LineBuffer) startFlushTimer() {
 func (lb *LineBuffer) timerFlush() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
-	
+
 	if lb.closed {
 		return
 	}
-	
+
 	if time.Since(lb.lastFlush) >= lb.flushTimeout {
-		lb.flushLocked()
+		if lb.bufferSize <= chunkSize {
+			lb.flushBuilderLocked()
+		} else {
+			lb.flushLocked()
+		}
 	}
-	
+
 	lb.startFlushTimer()
 }
 
 func (lb *LineBuffer) flushLocked() {
-	if lb.buffer.Len() == 0 {
+	if lb.builder.Len() > 0 {
+		lb.buffers = append(lb.buffers, lb.builder.String())
+		lb.currentSize += lb.builder.Len()
+		lb.builder.Reset()
+	}
+
+	if lb.currentSize == 0 {
 		return
 	}
-	
-	lb.logger.Debugf("Flushing buffer with %d lines (%d bytes)", lb.lineCount, lb.buffer.Len())
-	lb.writer.Write(lb.buffer.String())
-	lb.buffer.Reset()
+
+	lb.logger.Debugf("Flushing buffer with %d lines (%d bytes)", lb.lineCount, lb.currentSize)
+	for _, line := range lb.buffers {
+		lb.writer.Write(line)
+	}
+	lb.buffers = nil
+	lb.lineCount = 0
+	lb.currentSize = 0
+	lb.lastFlush = time.Now()
+}
+
+func (lb *LineBuffer) flushBuilderLocked() {
+	if lb.builder.Len() == 0 {
+		return
+	}
+
+	lb.logger.Debugf("Flushing buffer with %d lines (%d bytes)", lb.lineCount, lb.builder.Len())
+	lb.writer.Write(lb.builder.String())
+	lb.builder.Reset()
 	lb.lineCount = 0
 	lb.lastFlush = time.Now()
 }
