@@ -118,6 +118,7 @@ func (lb *LineBuffer) timerFlush() {
 	}
 
 	if time.Since(lb.lastFlush) >= lb.flushTimeout {
+		lb.logger.Infof("Timer flush")
 		if lb.bufferSize <= chunkSize {
 			lb.flushBuilderLocked()
 		} else {
@@ -139,7 +140,7 @@ func (lb *LineBuffer) flushLocked() {
 		return
 	}
 
-	lb.logger.Debugf("Flushing buffer with %d lines (%d bytes)", lb.lineCount, lb.currentSize)
+	lb.logger.Infof("Flushing %d buffers with %d lines (%d bytes)", len(lb.buffers), lb.lineCount, lb.currentSize)
 	for _, line := range lb.buffers {
 		lb.writer.Write(line)
 	}
