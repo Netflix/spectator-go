@@ -5,6 +5,7 @@ import (
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"os"
+	"time"
 )
 
 // Config represents the Registry's configuration.
@@ -13,6 +14,7 @@ type Config struct {
 	extraCommonTags map[string]string
 	log             logger.Logger
 	bufferSize      int
+	flushInterval   time.Duration
 }
 
 // NewConfig creates a new configuration with the provided location, extra common tags, and logger. All fields are
@@ -38,14 +40,77 @@ func NewConfig(
 	extraCommonTags map[string]string, // defaults to empty map
 	log logger.Logger, // defaults to default logger
 ) (*Config, error) {
-	return NewConfigWithBuffer(location, extraCommonTags, log, 0)
+	return NewConfigWithBuffer(location, extraCommonTags, log, 0, 5 * time.Second)
 }
 
+// NewConfigWithBuffer creates a new configuration with the provided location, extra common tags, logger, bufferSize,
+// and flushInterval. This factory function should be used when you need additional performance when publishing metrics.
+//
+// There are two buffer implementations that can be selected, when a bufferSize > 0 is configured:
+//
+//   - LineBuffer (bufferSize <= 65536), which is a single string buffer, protected by a mutex, that offers
+//     write performance up to ~1M lines/sec (spectatord maximum), with a latency per write ranging from
+//     0.1-15 us, depending upon the number of threads in use.
+//
+//     Metrics are flushed from the buffer when an overflow occurs, and periodically by a goroutine, according to
+//     the flush interval. Thus, if there are periods of time when metric publishing is slow, metrics will still be
+//     delivered from the buffer on time. Note that the spectatord publish interval is every 5 seconds, which is a
+//     good choice for this configuration. This buffer will block, and it will not drop lines.
+//
+//     The LineBuffer reports two metrics, which can be used to monitor buffer performance:
+//
+//       - spectator-go.lineBuffer.bytesWritten - A counter reporting bytes/sec written to spectatord.
+//       - spectator-go.lineBuffer.overflows    - A counter reporting overflows/sec, which are flushes before interval.
+//
+//     Example configuration:
+//
+//       config, _ := NewConfigWithBuffer("udp", nil, nil, 61440, 5*time.Second)
+//
+//   - LowLatencyBuffer (bufferSize > 65536), which builds arrays of buffers that are optimized for introducing
+//     the least amount of latency in highly multithreaded applications that record many metrics. It offers write
+//     performance up to ~1 M lines/sec (spectatord maximum), with a latency per write ranging from 0.6-3 us,
+//     depending upon the number of threads in use.
+//
+//     This is achieved by spreading data access across a number of different mutexes, and only writing buffers from
+//     a goroutine that runs periodically, according to the flushInterval. There is a front buffer and a back buffer,
+//     and these are rotated during the periodic flush. The inactive buffer is flushed, while the active buffer
+//     continues to receive metric writes from the application. Within each buffer, there are numCPU shards, and each
+//     buffer shard has N chunks, where a chunk is set to 60KB, to allow the data to fit within the spectatord socket
+//     buffers with room for one last protocol line. This buffer will not block, and it can drop lines, if it overflows.
+//
+//     As a sizing example, if you have an 8 CPU system, and you want to allocate 5 MB to each buffer shard, and
+//     there are two buffers (front and back), then you need to configure a buffer size of 83,886,080 bytes. Each
+//     buffer shard will have 85 chunks, each of which is protected by a separate mutex.
+//
+//       2 buffers (front/back) * 8 CPU (shard count) * 5,242,880 bytes/shard *  = 83,886,080 bytes total
+//
+//     Pairing this with a 1-second flush interval will result in a configuration that can handle ~85K lines/sec writes
+//     to spectatord. Note that the spectatord publish interval is every 5 seconds, so you have some room to experiment
+//     with different buffer sizes and publish intervals.
+//
+//     While the bufferSize can be set as low as 65537, it will guarantee a minimum size of 2 * CPU * 60KB, to ensure
+//     that there is always at least 1 chunk per shard. On a system with 1 CPU, this will be 122,880 bytes, and on a
+//     system with 4 CPU, this will be 491,520 bytes.
+//
+//     The LowLatencyBuffer reports two metrics, which can be used to monitor buffer performance:
+//
+//       - spectator-go.lowLatencyBuffer.bytesWritten - A counter reporting bytes/sec written to spectatord.
+//       - spectator-go.lowLatencyBuffer.overflows    - A counter reporting overflows/sec, which are drops.
+//       - spectator-go.lowLatencyBuffer.pctUsage     - A gauge reporting the percent usage of the buffers.
+//
+//     When using the LowLatencyBuffer, it is recommended to watch the spectatord.parsedCount metric, to ensure that
+//     you have sufficient headroom against the maximum data ingestion rate of ~1 M lines/sec for spectatord.
+//
+//     Example configuration:
+//
+//       config, _ := NewConfigWithBuffer("udp", nil, nil, 83886080, 1*time.Second)
+//
 func NewConfigWithBuffer(
 	location string, // defaults to `udp`
 	extraCommonTags map[string]string, // defaults to empty map
 	log logger.Logger, // defaults to default logger
 	bufferSize int, // defaults to 0 (disabled)
+	flushInterval time.Duration, // defaults to 5 seconds
 ) (*Config, error) {
 	location, err := calculateLocation(location)
 	if err != nil {
@@ -54,22 +119,21 @@ func NewConfigWithBuffer(
 
 	mergedTags := calculateExtraCommonTags(extraCommonTags)
 
-	lg := calculateLogger(log)
-
 	return &Config{
 		location:        location,
 		extraCommonTags: mergedTags,
-		log:             lg,
+		log:             calculateLogger(log),
 		bufferSize:      bufferSize,
+		flushInterval:   flushInterval,
 	}, nil
 }
 
 func calculateLogger(log logger.Logger) logger.Logger {
-	lg := log
 	if log == nil {
-		lg = logger.NewDefaultLogger()
+		return logger.NewDefaultLogger()
+	} else {
+		return log
 	}
-	return lg
 }
 
 func calculateExtraCommonTags(extraCommonTags map[string]string) map[string]string {

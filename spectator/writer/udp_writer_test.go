@@ -20,6 +20,48 @@ func TestNewUdpWriter(t *testing.T) {
 	}
 }
 
+func TestUdpWriter_NoBuffer(t *testing.T) {
+	writer, _ := NewUdpWriterWithBuffer("localhost:5000", logger.NewDefaultLogger(), 0, time.Second)
+	if writer.lineBuffer != nil {
+		t.Errorf("Expected nil LineBuffer")
+	}
+	if writer.lowLatencyBuffer != nil {
+		t.Errorf("Expected nil LowLatencyBuffer")
+	}
+	err := writer.Close()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestUdpWriter_LineBuffer(t *testing.T) {
+	writer, _ := NewUdpWriterWithBuffer("localhost:5000", logger.NewDefaultLogger(), 65536, time.Second)
+	if writer.lineBuffer == nil {
+		t.Errorf("Expected LineBuffer")
+	}
+	if writer.lowLatencyBuffer != nil {
+		t.Errorf("Expected nil LowLatencyBuffer")
+	}
+	err := writer.Close()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestUdpWriter_LowLatencyBuffer(t *testing.T) {
+	writer, _ := NewUdpWriterWithBuffer("localhost:5000", logger.NewDefaultLogger(), 65537, time.Second)
+	if writer.lineBuffer != nil {
+		t.Errorf("Expected nil LineBuffer")
+	}
+	if writer.lowLatencyBuffer == nil {
+		t.Errorf("Expected LowLatencyBuffer")
+	}
+	err := writer.Close()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
 func TestUdpWriter_Close(t *testing.T) {
 	writer, _ := NewUdpWriter("localhost:5000", logger.NewDefaultLogger())
 	err := writer.Close()
@@ -41,14 +83,14 @@ func TestNewUdpWriter_InvalidAddress(t *testing.T) {
 // Test write after close using a local UDP server
 func TestUdpWriter_WriteAfterClose(t *testing.T) {
 	// Start a local UDP server
-	pc, err := net.ListenPacket("udp", "localhost:0")
+	server, err := net.ListenPacket("udp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Could not start UDP server: %v", err)
 	}
-	defer pc.Close()
+	defer server.Close()
 
 	// Create a new UDP writer
-	writer, err := NewUdpWriter(pc.LocalAddr().String(), logger.NewDefaultLogger())
+	writer, err := NewUdpWriter(server.LocalAddr().String(), logger.NewDefaultLogger())
 	if err != nil {
 		t.Fatalf("Could not create UDP writer: %v", err)
 	}
@@ -61,8 +103,8 @@ func TestUdpWriter_WriteAfterClose(t *testing.T) {
 
 	// Check that no message was received
 	buffer := make([]byte, 1024)
-	_ = pc.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
-	_, _, err = pc.ReadFrom(buffer)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
+	_, _, err = server.ReadFrom(buffer)
 	// ReadFrom will throw error if no message is received after timeout
 	if err == nil {
 		t.Errorf("Expected error, got nil")
@@ -72,14 +114,14 @@ func TestUdpWriter_WriteAfterClose(t *testing.T) {
 
 func TestUdpWriter_Write(t *testing.T) {
 	// Start a local UDP server
-	pc, err := net.ListenPacket("udp", "localhost:0")
+	server, err := net.ListenPacket("udp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Could not start UDP server: %v", err)
 	}
-	defer pc.Close()
+	defer server.Close()
 
 	// Create a new UDP writer
-	writer, err := NewUdpWriter(pc.LocalAddr().String(), logger.NewDefaultLogger())
+	writer, err := NewUdpWriter(server.LocalAddr().String(), logger.NewDefaultLogger())
 	if err != nil {
 		t.Fatalf("Could not create UDP writer: %v", err)
 	}
@@ -90,8 +132,8 @@ func TestUdpWriter_Write(t *testing.T) {
 
 	// Read the message from the UDP server
 	buffer := make([]byte, len(message))
-	_ = pc.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
-	n, _, err := pc.ReadFrom(buffer)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
+	n, _, err := server.ReadFrom(buffer)
 	if err != nil {
 		t.Fatalf("Could not read from UDP server: %v", err)
 	}
@@ -102,16 +144,16 @@ func TestUdpWriter_Write(t *testing.T) {
 	}
 }
 
-func TestUdpWriterWithBuffer_Write(t *testing.T) {
+func TestUdpWriter_LineBuffer_Write(t *testing.T) {
 	// Start a local UDP server
-	pc, err := net.ListenPacket("udp", "localhost:0")
+	server, err := net.ListenPacket("udp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Could not start UDP server: %v", err)
 	}
-	defer pc.Close()
+	defer server.Close()
 
 	// Create a new UDP writer
-	writer, err := NewUdpWriterWithBuffer(pc.LocalAddr().String(), logger.NewDefaultLogger(), 20)
+	writer, err := NewUdpWriterWithBuffer(server.LocalAddr().String(), logger.NewDefaultLogger(), 20, 5*time.Second)
 	if err != nil {
 		t.Fatalf("Could not create UDP writer: %v", err)
 	}
@@ -122,15 +164,29 @@ func TestUdpWriterWithBuffer_Write(t *testing.T) {
 	writer.Write("message3")
 
 	// Read the message from the UDP server
-	buffer := make([]byte, 30)
-	_ = pc.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
-	n, _, err := pc.ReadFrom(buffer)
+	buffer := make([]byte, 50)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
+	n, _, err := server.ReadFrom(buffer)
 	if err != nil {
 		t.Fatalf("Could not read from UDP server: %v", err)
 	}
 
 	// Check the message
-	expected := "message1\nmessage2\nmessage3"
+	expected := "c:spectator-go.lineBuffer.overflows:1"
+	if string(buffer[:n]) != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, string(buffer[:n]))
+	}
+
+	// Read the message from the UDP server
+	buffer = make([]byte, 50)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
+	n, _, err = server.ReadFrom(buffer)
+	if err != nil {
+		t.Fatalf("Could not read from UDP server: %v", err)
+	}
+
+	// Check the message
+	expected = "message1\nmessage2\nmessage3"
 	if string(buffer[:n]) != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, string(buffer[:n]))
 	}
@@ -142,14 +198,14 @@ func TestConcurrentWrites(t *testing.T) {
 	var lines []string
 
 	// Start a local UDP server
-	pc, err := net.ListenPacket("udp", "localhost:0")
+	server, err := net.ListenPacket("udp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Could not start UDP server: %v", err)
 	}
-	defer pc.Close()
+	defer server.Close()
 
 	// Create a new UDP writer
-	writer, err := NewUdpWriter(pc.LocalAddr().String(), logger.NewDefaultLogger())
+	writer, err := NewUdpWriter(server.LocalAddr().String(), logger.NewDefaultLogger())
 	if err != nil {
 		t.Fatalf("Could not create UDP writer: %v", err)
 	}
@@ -164,8 +220,8 @@ func TestConcurrentWrites(t *testing.T) {
 		for {
 			// read line from UDP server
 			buffer := make([]byte, 1024)
-			_ = pc.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
-			n, _, err := pc.ReadFrom(buffer)
+			_ = server.SetReadDeadline(time.Now().Add(time.Second)) // prevent infinite blocking
+			n, _, err := server.ReadFrom(buffer)
 			if err != nil {
 				t.Errorf("Error reading from UDP server: %v", err)
 				break

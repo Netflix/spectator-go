@@ -69,7 +69,7 @@ func NewRegistry(config *Config) (Registry, error) {
 		config, _ = NewConfig("", nil, nil)
 	}
 
-	newWriter, err := writer.NewWriterWithBuffer(config.location, config.log, config.bufferSize)
+	newWriter, err := writer.NewWriterWithBuffer(config.location, config.log, config.bufferSize, config.flushInterval)
 	if err != nil {
 		return nil, err
 	}

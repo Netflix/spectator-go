@@ -3,34 +3,25 @@ package writer
 import (
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"net"
+	"time"
 )
 
 type UdpWriter struct {
-	conn       *net.UDPConn
-	logger     logger.Logger
-	lineBuffer *LineBuffer
+	conn             *net.UDPConn
+	logger           logger.Logger
+	lineBuffer       *LineBuffer
+	lowLatencyBuffer *LowLatencyBuffer
 }
 
-type udpDirectWriter struct {
+type udpBufferWriter struct {
 	*UdpWriter
 }
 
-func (u *udpDirectWriter) Write(line string) {
-	u.UdpWriter.writeDirectly(line)
-}
-
-func (u *udpDirectWriter) Close() error {
-	if u.UdpWriter.conn != nil {
-		return u.UdpWriter.conn.Close()
-	}
-	return nil
-}
-
 func NewUdpWriter(address string, logger logger.Logger) (*UdpWriter, error) {
-	return NewUdpWriterWithBuffer(address, logger, 0)
+	return NewUdpWriterWithBuffer(address, logger, 0, 5*time.Second)
 }
 
-func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int) (*UdpWriter, error) {
+func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int, flushInterval time.Duration) (*UdpWriter, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return nil, err
@@ -47,27 +38,42 @@ func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int
 	}
 
 	var lineBuffer *LineBuffer
-	if bufferSize > 0 {
-		lineBuffer = NewLineBuffer(&udpDirectWriter{baseWriter}, bufferSize, logger)
+	var lowLatencyBuffer *LowLatencyBuffer
+	if bufferSize > 0 && bufferSize <= 65536 {
+		lineBuffer = NewLineBuffer(&udpBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
+	} else if bufferSize > 0 {
+		lowLatencyBuffer = NewLowLatencyBuffer(&udpBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
 	}
-
 	baseWriter.lineBuffer = lineBuffer
+	baseWriter.lowLatencyBuffer = lowLatencyBuffer
+
 	return baseWriter, nil
 }
 
 func (u *UdpWriter) Write(line string) {
+	u.logger.Debugf("Sending line: %s", line)
+
 	if u.lineBuffer != nil {
 		u.lineBuffer.Write(line)
 		return
 	}
 
-	u.writeDirectly(line)
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.Write(line)
+		return
+	}
+
+	u.WriteString(line)
 }
 
-func (u *UdpWriter) writeDirectly(line string) {
-	u.logger.Debugf("Sending line: %s", line)
+func (u *UdpWriter) WriteBytes(line []byte) {
+	_, err := u.conn.Write(line)
+	if err != nil {
+		u.logger.Errorf("Error writing to UDP: %s", err)
+	}
+}
 
-	// Methods on conn are thread-safe
+func (u *UdpWriter) WriteString(line string) {
 	_, err := u.conn.Write([]byte(line))
 	if err != nil {
 		u.logger.Errorf("Error writing to UDP: %s", err)
@@ -75,10 +81,20 @@ func (u *UdpWriter) writeDirectly(line string) {
 }
 
 func (u *UdpWriter) Close() error {
+	// Stop flush timer, and flush remaining lines
 	if u.lineBuffer != nil {
-		if err := u.lineBuffer.Close(); err != nil {
-			return err
-		}
+		u.lineBuffer.Close()
 	}
-	return u.conn.Close()
+
+	// Stop flush goroutines
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.Close()
+	}
+
+	// Close the connection, if it exists
+	if u.conn != nil {
+		return u.conn.Close()
+	}
+
+	return nil
 }
