@@ -143,27 +143,28 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 }
 
 func toSpectatorId(name string, tags map[string]string) string {
-	result := replaceInvalidCharacters(name)
+	var sb strings.Builder
+	writeSanitized(&sb, name)
 
+	// Append sanitized keys and values.
 	for k, v := range tags {
-		k = replaceInvalidCharacters(k)
-		v = replaceInvalidCharacters(v)
-		result += fmt.Sprintf(",%s=%s", k, v)
+		sb.WriteString(",")
+		writeSanitized(&sb, k)
+		sb.WriteString("=")
+		writeSanitized(&sb, v)
 	}
 
-	return result
+	return sb.String()
 }
 
-func replaceInvalidCharacters(input string) string {
-	var result strings.Builder
+func writeSanitized(sb *strings.Builder, input string) {
 	for _, r := range input {
 		if !isValidCharacter(r) {
-			result.WriteRune('_')
+			sb.WriteRune('_')
 		} else {
-			result.WriteRune(r)
+			sb.WriteRune(r)
 		}
 	}
-	return result.String()
 }
 
 func isValidCharacter(r rune) bool {

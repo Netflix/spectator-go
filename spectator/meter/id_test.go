@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -141,5 +142,53 @@ func TestToSpectatorId_InvalidTags(t *testing.T) {
 
 	if result != expected1 && result != expected2 {
 		t.Errorf("Expected '%s' or '%s', got '%s'", expected1, expected2, result)
+	}
+}
+
+var benchName = "my.metric.with_a_fairly_long_name.and.some.invalid.chars!@#"
+var benchTags = map[string]string{
+	"tag1":         "value1",
+	"another_tag":  "another_value_with_some_length",
+	"invalid-key!": "invalid-value@",
+	"tag4":         "value4",
+	"last.tag":     "final~value",
+}
+
+func BenchmarkToSpectatorId(b *testing.B) {
+	replaceInvalidCharacters := func(input string) string {
+		var result strings.Builder
+		for _, r := range input {
+			if !isValidCharacter(r) {
+				result.WriteRune('_')
+			} else {
+				result.WriteRune(r)
+			}
+		}
+		return result.String()
+
+	}
+	originalToSpectatorId := func(name string, tags map[string]string) string {
+		result := replaceInvalidCharacters(name)
+
+		for k, v := range tags {
+			k = replaceInvalidCharacters(k)
+			v = replaceInvalidCharacters(v)
+			result += fmt.Sprintf(",%s=%s", k, v)
+
+		}
+
+		return result
+	}
+
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		_ = originalToSpectatorId(benchName, benchTags)
+	}
+}
+
+func BenchmarkToSpectatorIdBuilder(b *testing.B) {
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		_ = toSpectatorId(benchName, benchTags)
 	}
 }
