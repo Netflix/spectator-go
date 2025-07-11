@@ -50,17 +50,17 @@ func NewConfig(
 //
 //   - LineBuffer (bufferSize <= 65536), which is a single string buffer, protected by a mutex, that offers
 //     write performance up to ~1M lines/sec (spectatord maximum), with a latency per write ranging from
-//     0.1-15 us, depending upon the number of threads in use.
+//     0.1 to 32 us, depending upon the number of threads in use.
 //
-//     Metrics are flushed from the buffer when an overflow occurs, and periodically by a goroutine, according to
-//     the flush interval. Thus, if there are periods of time when metric publishing is slow, metrics will still be
-//     delivered from the buffer on time. Note that the spectatord publish interval is every 5 seconds, which is a
-//     good choice for this configuration. This buffer will block, and it will not drop lines.
+//     Metrics are flushed from the buffer when an overflow occurs, and periodically by a timer, according to the
+//     flush interval. Thus, if there are periods of time when metric publishing is slow, metrics will still be
+//     delivered from the buffer on time. Note that the spectatord publish interval is every 5 seconds, which is
+//     a good choice for this configuration. This buffer will block, and it will not drop lines.
 //
-//     The LineBuffer reports two metrics, which can be used to monitor buffer performance:
+//     The LineBuffer reports metrics, which can be used to monitor buffer performance:
 //
 //       - spectator-go.lineBuffer.bytesWritten - A counter reporting bytes/sec written to spectatord.
-//       - spectator-go.lineBuffer.overflows    - A counter reporting overflows/sec, which are flushes before interval.
+//       - spectator-go.lineBuffer.overflows    - A counter reporting overflows/sec, which are flushes before the interval.
 //
 //     Example configuration:
 //
@@ -68,11 +68,11 @@ func NewConfig(
 //
 //   - LowLatencyBuffer (bufferSize > 65536), which builds arrays of buffers that are optimized for introducing
 //     the least amount of latency in highly multithreaded applications that record many metrics. It offers write
-//     performance up to ~1 M lines/sec (spectatord maximum), with a latency per write ranging from 0.6-3 us,
+//     performance up to ~1 M lines/sec (spectatord maximum), with a latency per write ranging from 0.6 to 7 us,
 //     depending upon the number of threads in use.
 //
 //     This is achieved by spreading data access across a number of different mutexes, and only writing buffers from
-//     a goroutine that runs periodically, according to the flushInterval. There is a front buffer and a back buffer,
+//     a goroutine that runs periodically, according to the flush interval. There is a front buffer and a back buffer,
 //     and these are rotated during the periodic flush. The inactive buffer is flushed, while the active buffer
 //     continues to receive metric writes from the application. Within each buffer, there are numCPU shards, and each
 //     buffer shard has N chunks, where a chunk is set to 60KB, to allow the data to fit within the spectatord socket
@@ -92,14 +92,14 @@ func NewConfig(
 //     that there is always at least 1 chunk per shard. On a system with 1 CPU, this will be 122,880 bytes, and on a
 //     system with 4 CPU, this will be 491,520 bytes.
 //
-//     The LowLatencyBuffer reports two metrics, which can be used to monitor buffer performance:
+//     The LowLatencyBuffer reports metrics, which can be used to monitor buffer performance:
 //
 //       - spectator-go.lowLatencyBuffer.bytesWritten - A counter reporting bytes/sec written to spectatord.
 //       - spectator-go.lowLatencyBuffer.overflows    - A counter reporting overflows/sec, which are drops.
 //       - spectator-go.lowLatencyBuffer.pctUsage     - A gauge reporting the percent usage of the buffers.
 //
 //     When using the LowLatencyBuffer, it is recommended to watch the spectatord.parsedCount metric, to ensure that
-//     you have sufficient headroom against the maximum data ingestion rate of ~1 M lines/sec for spectatord.
+//     you have sufficient headroom against the maximum data ingestion rate of ~1M lines/sec for spectatord.
 //
 //     Example configuration:
 //
