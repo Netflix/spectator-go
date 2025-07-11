@@ -2,37 +2,36 @@ package writer
 
 import (
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 type LineBuffer struct {
-	writer       Writer
-	bufferSize   int
-	flushTimeout time.Duration
-	logger       logger.Logger
-	
-	mu         sync.Mutex
-	buffer     strings.Builder
-	lineCount  int
-	lastFlush  time.Time
-	flushTimer *time.Timer
-	closed     bool
+	writer Writer
+	logger logger.Logger
+
+	bufferSize    int
+	buffer        strings.Builder
+	lineCount     int
+	flushInterval time.Duration
+	lastFlush     time.Time
+	flushTimer    *time.Timer
+
+	mu sync.Mutex
 }
 
-func NewLineBuffer(writer Writer, bufferSize int, logger logger.Logger, timeoutOptional ...time.Duration) *LineBuffer {
-	timeout := 5 * time.Second
-	if len(timeoutOptional) > 0 {
-		timeout = timeoutOptional[0]
-	}
+func NewLineBuffer(writer Writer, logger logger.Logger, bufferSize int, flushInterval time.Duration) *LineBuffer {
+	logger.Infof("Initialize LineBuffer with size %d bytes, and flushInterval of %.2f seconds", bufferSize, flushInterval.Seconds())
 
 	lb := &LineBuffer{
-		writer:       writer,
-		bufferSize:   bufferSize,
-		flushTimeout: timeout,
-		logger:       logger,
-		lastFlush:    time.Now(),
+		writer:        writer,
+		logger:        logger,
+		bufferSize:    bufferSize,
+		lineCount:     0,
+		flushInterval: flushInterval,
+		lastFlush:     time.Now(),
 	}
 
 	lb.startFlushTimer()
@@ -41,78 +40,59 @@ func NewLineBuffer(writer Writer, bufferSize int, logger logger.Logger, timeoutO
 }
 
 func (lb *LineBuffer) Write(line string) {
-	if lb.bufferSize <= 0 {
-		lb.writer.Write(line)
-		return
-	}
-	
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
-	
-	if lb.closed {
-		return
-	}
-	
+
 	if lb.buffer.Len() > 0 {
-		lb.buffer.WriteString("\n")
+		// buffer has data, so add the separator to indicate the end of the previous line
+		lb.buffer.WriteString(separator)
 	}
+
 	lb.buffer.WriteString(line)
 	lb.lineCount++
-	
-	if lb.buffer.Len() >= lb.bufferSize {
-		lb.flushLocked()
-	}
-}
 
-func (lb *LineBuffer) Close() error {
-	if lb.bufferSize <= 0 {
-		return lb.writer.Close()
+	if lb.buffer.Len() >= lb.bufferSize {
+		lb.writer.WriteString("c:spectator-go.lineBuffer.overflows:1")
+		lb.flush()
 	}
-	
-	lb.mu.Lock()
-	defer lb.mu.Unlock()
-	
-	if lb.closed {
-		return nil
-	}
-	
-	lb.closed = true
-	
-	if lb.flushTimer != nil {
-		lb.flushTimer.Stop()
-	}
-	
-	lb.flushLocked()
-	return lb.writer.Close()
 }
 
 func (lb *LineBuffer) startFlushTimer() {
-	lb.flushTimer = time.AfterFunc(lb.flushTimeout, lb.timerFlush)
-}
-
-func (lb *LineBuffer) timerFlush() {
-	lb.mu.Lock()
-	defer lb.mu.Unlock()
-	
-	if lb.closed {
-		return
-	}
-	
-	if time.Since(lb.lastFlush) >= lb.flushTimeout {
-		lb.flushLocked()
-	}
-	
-	lb.startFlushTimer()
+	lb.flushTimer = time.AfterFunc(lb.flushInterval, lb.flushLocked)
 }
 
 func (lb *LineBuffer) flushLocked() {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	if time.Since(lb.lastFlush) >= lb.flushInterval {
+		lb.flush()
+	}
+
+	lb.startFlushTimer()
+}
+
+func (lb *LineBuffer) flush() {
+	// If there is no data to flush from the buffer, then skip socket writes
 	if lb.buffer.Len() == 0 {
 		return
 	}
-	
+
 	lb.logger.Debugf("Flushing buffer with %d lines (%d bytes)", lb.lineCount, lb.buffer.Len())
-	lb.writer.Write(lb.buffer.String())
+	lb.writer.WriteString(lb.buffer.String())
+	lb.writer.WriteString("c:spectator-go.lineBuffer.bytesWritten:" + strconv.Itoa(lb.buffer.Len()))
 	lb.buffer.Reset()
 	lb.lineCount = 0
 	lb.lastFlush = time.Now()
+}
+
+func (lb *LineBuffer) Close() {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	if lb.flushTimer != nil {
+		lb.flushTimer.Stop()
+	}
+
+	lb.flush()
 }

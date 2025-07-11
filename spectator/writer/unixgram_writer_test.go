@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"errors"
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"log"
 	"net"
@@ -9,26 +10,29 @@ import (
 	"time"
 )
 
+const testUnixgramSocket = "/tmp/spectator-go_unixgram.sock"
+
 // newUnixgramServer creates a new unixgram server and returns a connection to it.
 // The server listens for incoming messages and sends them to the provided channel.
-func newUnixgramServer(socketFile string, msgCh chan string) (*net.UnixConn, error) {
-	if err := os.RemoveAll(socketFile); err != nil {
-		return nil, err
+func newUnixgramServer() (*net.UnixConn, chan string, error) {
+	if err := os.RemoveAll(testUnixgramSocket); err != nil {
+		return nil, nil, err
 	}
 
 	addr := &net.UnixAddr{
-		Name: socketFile,
+		Name: testUnixgramSocket,
 		Net:  "unixgram",
 	}
 
 	conn, err := net.ListenUnixgram("unixgram", addr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	go handleConnections(conn, msgCh)
+	messages := make(chan string)
+	go handleConnections(conn, messages)
 
-	return conn, nil
+	return conn, messages, nil
 }
 
 func handleConnections(conn *net.UnixConn, msgCh chan string) {
@@ -46,81 +50,164 @@ func handleConnections(conn *net.UnixConn, msgCh chan string) {
 	}
 }
 
-func TestUnixgramWriter_Integration(t *testing.T) {
-	// Create a channel for messages
-	msgCh := make(chan string)
+func readMessage(messages chan string) (string, error) {
+	select {
+	case message := <-messages:
+		return message, nil
+	case <-time.After(time.Second):
+		return "", errors.New("timeout waiting for message")
+	}
+}
 
-	// Create a new unixgram server
-	socketFile := "/tmp/test_spectator_unixgram.sock"
-	server, err := newUnixgramServer(socketFile, msgCh)
-	if err != nil {
-		t.Fatalf("Failed to create unixgram server: %v", err)
+func TestUnixgramWriter_NoBuffer(t *testing.T) {
+	// Create server
+	server, _, serverErr := newUnixgramServer()
+	if serverErr != nil {
+		t.Fatalf("Failed to create unixgram server: %v", serverErr)
 	}
 	defer server.Close()
 
-	// Create a file_writer instance
-	writer, err := NewUnixgramWriter(socketFile, logger.NewDefaultLogger())
+	// Create writer
+	writer, err := NewUnixgramWriterWithBuffer(testUnixgramSocket, logger.NewDefaultLogger(), 0, time.Second)
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+	if writer.lineBuffer != nil {
+		t.Errorf("Expected nil LineBuffer")
+	}
+	if writer.lowLatencyBuffer != nil {
+		t.Errorf("Expected nil LowLatencyBuffer")
+	}
+	err = writer.Close()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestUnixgramWriter_LineBuffer(t *testing.T) {
+	// Create server
+	server, _, serverErr := newUnixgramServer()
+	if serverErr != nil {
+		t.Fatalf("Failed to create unixgram server: %v", serverErr)
+	}
+	defer server.Close()
+
+	// Create writer
+	writer, err := NewUnixgramWriterWithBuffer(testUnixgramSocket, logger.NewDefaultLogger(), 65536, time.Second)
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+	if writer.lineBuffer == nil {
+		t.Errorf("Expected LineBuffer")
+	}
+	if writer.lowLatencyBuffer != nil {
+		t.Errorf("Expected nil LowLatencyBuffer")
+	}
+	err = writer.Close()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestUnixgramWriter_LowLatencyBuffer(t *testing.T) {
+	// Create server
+	server, _, serverErr := newUnixgramServer()
+	if serverErr != nil {
+		t.Fatalf("Failed to create unixgram server: %v", serverErr)
+	}
+	defer server.Close()
+
+	// Create writer
+	writer, err := NewUnixgramWriterWithBuffer(testUnixgramSocket, logger.NewDefaultLogger(), 65537, time.Second)
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+	if writer.lineBuffer != nil {
+		t.Errorf("Expected nil LineBuffer")
+	}
+	if writer.lowLatencyBuffer == nil {
+		t.Errorf("Expected LowLatencyBuffer")
+	}
+	err = writer.Close()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestUnixgramWriter_Write(t *testing.T) {
+	// Create server
+	server, msgCh, serverErr := newUnixgramServer()
+	if serverErr != nil {
+		t.Fatalf("Failed to create unixgram server: %v", serverErr)
+	}
+	defer server.Close()
+
+	// Create writer
+	writer, err := NewUnixgramWriter(testUnixgramSocket, logger.NewDefaultLogger())
 	if err != nil {
 		t.Fatalf("Failed to create writer: %v", err)
 	}
 
-	// Write some messages
+	// Write messages
 	messages := []string{"message1", "message2", "message3"}
 	for _, msg := range messages {
 		writer.Write(msg)
 	}
 
-	// Read the messages from the unixgram server
-	for _, originalMsg := range messages {
-		select {
-		case receivedMsg := <-msgCh:
-			if receivedMsg != originalMsg {
-				t.Errorf("Received message '%s' does not match original message '%s'", receivedMsg, originalMsg)
-			}
-		case <-time.After(time.Second):
-			t.Error("Timeout waiting for message")
+	// Read messages from server
+	for _, origMsg := range messages {
+		recvMsg, recvErr := readMessage(msgCh)
+		if recvErr != nil {
+			t.Errorf("Failed to receive message: %v", recvErr)
+		}
+		if recvMsg != origMsg {
+			t.Errorf("Received message '%s' does not match original message '%s'", recvMsg, origMsg)
 		}
 	}
 
-	// allow some time for message logging to complete
+	// Allow time for messages to deliver
 	time.Sleep(2 * time.Millisecond)
 }
 
-func TestUnixgramWriterWithBuffer_Integration(t *testing.T) {
-	// Create a channel for messages
-	msgCh := make(chan string)
-
-	// Create a new unixgram server
-	socketFile := "/tmp/test_spectator_unixgram_buffer.sock"
-	server, err := newUnixgramServer(socketFile, msgCh)
-	if err != nil {
-		t.Fatalf("Failed to create unixgram server: %v", err)
+func TestUnixgramWriter_LineBuffer_Write(t *testing.T) {
+	// Create server
+	server, msgCh, serverErr := newUnixgramServer()
+	if serverErr != nil {
+		t.Fatalf("Failed to create unixgram server: %v", serverErr)
 	}
 	defer server.Close()
 
-	// Create a file_writer instance
-	writer, err := NewUnixgramWriterWithBuffer(socketFile, logger.NewDefaultLogger(), 20)
+	// Create writer
+	writer, err := NewUnixgramWriterWithBuffer(testUnixgramSocket, logger.NewDefaultLogger(), 20, 5*time.Second)
 	if err != nil {
 		t.Fatalf("Failed to create writer: %v", err)
 	}
 
-	// Write some messages
+	// Write messages
 	messages := []string{"message1", "message2", "message3"}
 	for _, msg := range messages {
 		writer.Write(msg)
 	}
 
-	// Read the messages from the unixgram server
-	expected := "message1\nmessage2\nmessage3"
-	select {
-	case receivedMsg := <-msgCh:
-		if receivedMsg != expected {
-			t.Errorf("Received message '%s' does not match original message '%s'", receivedMsg, expected)
-		}
-	case <-time.After(time.Second):
-		t.Error("Timeout waiting for message")
+	// Read messages from server
+	expected := "c:spectator-go.lineBuffer.overflows:1"
+	recvMsg, recvErr := readMessage(msgCh)
+	if recvErr != nil {
+		t.Errorf("Failed to receive message: %v", recvErr)
+	}
+	if recvMsg != expected {
+		t.Errorf("Received message '%s' does not match original message '%s'", recvMsg, expected)
 	}
 
-	// allow some time for message logging to complete
+	expected = "message1\nmessage2\nmessage3"
+	recvMsg, recvErr = readMessage(msgCh)
+	if recvErr != nil {
+		t.Errorf("Failed to receive message: %v", recvErr)
+	}
+	if recvMsg != expected {
+		t.Errorf("Received message '%s' does not match original message '%s'", recvMsg, expected)
+	}
+
+	// Allow time for messages to deliver
 	time.Sleep(2 * time.Millisecond)
 }
