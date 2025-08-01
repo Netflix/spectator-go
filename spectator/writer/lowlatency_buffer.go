@@ -27,28 +27,32 @@ const separator = "\n"
 // is less than the impact of the front and back buffer design, but it is still important for
 // throughput reasons.
 type bufferShard struct {
-	data       [][]byte // Array of chunkSize chunks of spectatord protocol lines, stored as bytes
-	chunkIndex int      // Index of the chunk available for writes
-	overflows  int      // Count the buffer overflows, which correspond to data drops, for reporting metrics
-	mu         sync.Mutex
+	data          [][]byte // Array of chunkSize chunks of spectatord protocol lines, stored as bytes
+	chunkIndex    int      // Index of the chunk available for writes
+	overflows     int      // Count the buffer overflows, which correspond to data drops, for reporting metrics
+	overflowBytes int64    // Count the bytes that were dropped, for reporting metrics
+	mu            sync.Mutex
 }
 
 // getChunkIndexForLine returns the chunkIndex that should be used for storing the line, or -1, if there is
 // an overflow and the line cannot be stored in the bufferShard.
 func (b *bufferShard) getChunkIndexForLine(line []byte) int {
+	totalWriteLength := len(line)
+
 	// All chunks are full for the shard, drop the data
 	if b.chunkIndex >= len(b.data) {
 		b.overflows++
+		b.overflowBytes += int64(totalWriteLength)
 		return -1
 	}
 
 	// This should not happen, drop the data. The maximum length of a well-formed protocol line is 3.8KB.
 	if len(line) > chunkSize {
 		b.overflows++
+		b.overflowBytes += int64(totalWriteLength)
 		return -1
 	}
 
-	totalWriteLength := len(line)
 	if len(b.data[b.chunkIndex]) > 0 {
 		// Chunk has data, so account for the separator character
 		totalWriteLength++
@@ -62,6 +66,7 @@ func (b *bufferShard) getChunkIndexForLine(line []byte) int {
 	// Out of space in the shard, drop the data
 	if b.chunkIndex == len(b.data) {
 		b.overflows++
+		b.overflowBytes += int64(totalWriteLength)
 		return -1
 	}
 
@@ -249,7 +254,9 @@ func (llb *LowLatencyBuffer) flushBufferShard(buffer *bufferShard, bufferSet str
 	// record status metrics and reset shard statistics
 	if buffer.overflows > 0 {
 		llb.writer.WriteString(fmt.Sprintf("c:spectator-go.lowLatencyBuffer.overflows,bufferSet=%s:%d", bufferSet, buffer.overflows))
+		llb.writer.WriteString(fmt.Sprintf("d:spectator-go.lowLatencyBuffer.overflowBytes,bufferSet=%s:%d", bufferSet, buffer.overflowBytes))
 		buffer.overflows = 0
+		buffer.overflowBytes = 0
 	}
 	buffer.chunkIndex = 0
 	return bytesWritten
