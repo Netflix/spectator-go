@@ -2,11 +2,12 @@ package writer
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Netflix/spectator-go/v2/spectator/logger"
 )
 
 // chunkSize is set to 60KB, to ensure each message fits in the socket buffer (64KB), with some room
@@ -190,6 +191,8 @@ func (llb *LowLatencyBuffer) flushLoop() {
 
 // swapAndFlush swaps the front and back buffers and flushes the deactivated buffers
 func (llb *LowLatencyBuffer) swapAndFlush() {
+	start := time.Now()
+
 	// Swap the buffer sets, so one can be drained, while the other accepts application writes
 	old := llb.useFrontBuffers.Load()
 	llb.useFrontBuffers.CompareAndSwap(old, !old)
@@ -219,6 +222,8 @@ func (llb *LowLatencyBuffer) swapAndFlush() {
 	if pctUsage > 0 {
 		llb.writer.WriteString(fmt.Sprintf("g,1:spectator-go.lowLatencyBuffer.pctUsage,bufferSet=%s:%f", bufferSet, pctUsage))
 	}
+
+	llb.writer.WriteString(fmt.Sprintf("t:spectator-go.lowLatencyBuffer.flushTime,bufferSet=%s:%f", bufferSet, time.Since(start).Seconds()))
 }
 
 // flushBufferShard flushes a single bufferShard to the socket, iterating through all chunks
