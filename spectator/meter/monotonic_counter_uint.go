@@ -19,14 +19,14 @@ import (
 // A variety of networking metrics may be reported monotonically and this metric type provides a
 // convenient means of recording these values, at the expense of a slower time-to-first metric.
 type MonotonicCounterUint struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewMonotonicCounterUint generates a new counter, using the provided meter identifier.
 func NewMonotonicCounterUint(id *Id, writer writer.Writer) *MonotonicCounterUint {
-	return &MonotonicCounterUint{id, writer, "U"}
+	return &MonotonicCounterUint{id, writer, "U:" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -36,6 +36,5 @@ func (c *MonotonicCounterUint) MeterId() *Id {
 
 // Set sets a value as the current measurement; spectatord calculates the delta.
 func (c *MonotonicCounterUint) Set(value uint64) {
-	var line = c.meterTypeSymbol + ":" + c.id.spectatordId + ":" + strconv.FormatUint(value, 10)
-	c.writer.Write(line)
+	c.writer.Write(c.linePrefix + strconv.FormatUint(value, 10))
 }

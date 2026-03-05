@@ -85,11 +85,16 @@ func NewId(name string, tags map[string]string) *Id {
 		myTags[k] = v
 	}
 
+	return newId(name, myTags)
+}
+
+// newId creates a new *Id taking ownership of the provided tags map (no copy).
+func newId(name string, tags map[string]string) *Id {
 	spectatorId := toSpectatorId(name, tags)
 
 	return &Id{
 		name:         name,
-		tags:         myTags,
+		tags:         tags,
 		spectatordId: spectatorId,
 	}
 }
@@ -97,14 +102,14 @@ func NewId(name string, tags map[string]string) *Id {
 // WithTag creates a deep copy of the *Id, adding the requested tag to the
 // internal collection.
 func (id *Id) WithTag(key string, value string) *Id {
-	newTags := make(map[string]string)
+	newTags := make(map[string]string, len(id.tags)+1)
 
 	for k, v := range id.tags {
 		newTags[k] = v
 	}
 	newTags[key] = value
 
-	return NewId(id.name, newTags)
+	return newId(id.name, newTags)
 }
 
 func (id *Id) String() string {
@@ -130,7 +135,7 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 		return id
 	}
 
-	newTags := make(map[string]string)
+	newTags := make(map[string]string, len(id.tags)+len(tags))
 
 	for k, v := range id.tags {
 		newTags[k] = v
@@ -139,19 +144,26 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 	for k, v := range tags {
 		newTags[k] = v
 	}
-	return NewId(id.name, newTags)
+	return newId(id.name, newTags)
 }
 
 func toSpectatorId(name string, tags map[string]string) string {
-	var sb strings.Builder
-	writeSanitized(&sb, name)
+	sb := builderPool.Get().(*strings.Builder)
+	sb.Reset()
+	defer builderPool.Put(sb)
+
+	// Pre-size: name + per-tag overhead (comma + key + equals + value).
+	estimatedSize := len(name) + len(tags)*40
+	sb.Grow(estimatedSize)
+
+	writeSanitized(sb, name)
 
 	// Append sanitized keys and values.
 	for k, v := range tags {
 		sb.WriteString(",")
-		writeSanitized(&sb, k)
+		writeSanitized(sb, k)
 		sb.WriteString("=")
-		writeSanitized(&sb, v)
+		writeSanitized(sb, v)
 	}
 
 	return sb.String()

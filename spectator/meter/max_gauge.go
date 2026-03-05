@@ -15,14 +15,14 @@ import (
 //
 // https://netflix.github.io/spectator/en/latest/intro/gauge/
 type MaxGauge struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewMaxGauge generates a new gauge, using the provided meter identifier.
 func NewMaxGauge(id *Id, writer writer.Writer) *MaxGauge {
-	return &MaxGauge{id, writer, "m"}
+	return &MaxGauge{id, writer, "m:" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -32,6 +32,5 @@ func (g *MaxGauge) MeterId() *Id {
 
 // Set records the current value.
 func (g *MaxGauge) Set(value float64) {
-	var line = g.meterTypeSymbol + ":" + g.id.spectatordId + ":" + strconv.FormatFloat(value, 'f', 6, 64)
-	g.writer.Write(line)
+	g.writer.Write(g.linePrefix + strconv.FormatFloat(value, 'f', 6, 64))
 }

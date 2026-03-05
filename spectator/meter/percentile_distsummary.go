@@ -9,9 +9,9 @@ import (
 // PercentileDistributionSummary is a distribution summary used to track the
 // distribution of events, while also presenting the results as percentiles.
 type PercentileDistributionSummary struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 func (p *PercentileDistributionSummary) MeterId() *Id {
@@ -20,13 +20,12 @@ func (p *PercentileDistributionSummary) MeterId() *Id {
 
 // NewPercentileDistributionSummary creates a new *PercentileDistributionSummary using the meter identifier.
 func NewPercentileDistributionSummary(id *Id, writer writer.Writer) *PercentileDistributionSummary {
-	return &PercentileDistributionSummary{id, writer, "D"}
+	return &PercentileDistributionSummary{id, writer, "D:" + id.spectatordId + ":"}
 }
 
 // Record records an amount to track within the distribution.
 func (p *PercentileDistributionSummary) Record(amount int64) {
 	if amount >= 0 {
-		var line = p.meterTypeSymbol + ":" + p.id.spectatordId + ":" + strconv.FormatInt(amount, 10)
-		p.writer.Write(line)
+		p.writer.Write(p.linePrefix + strconv.FormatInt(amount, 10))
 	}
 }
