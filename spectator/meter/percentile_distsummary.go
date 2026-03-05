@@ -1,7 +1,8 @@
 package meter
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -25,7 +26,7 @@ func NewPercentileDistributionSummary(id *Id, writer writer.Writer) *PercentileD
 // Record records an amount to track within the distribution.
 func (p *PercentileDistributionSummary) Record(amount int64) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%s:%s:%d", p.meterTypeSymbol, p.id.spectatordId, amount)
+		var line = p.meterTypeSymbol + ":" + p.id.spectatordId + ":" + strconv.FormatInt(amount, 10)
 		p.writer.Write(line)
 	}
 }

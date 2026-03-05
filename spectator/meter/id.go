@@ -80,7 +80,7 @@ func (id *Id) MapKey() string {
 // NewId generates a new *Id from the metric name, and the tags you want to
 // include on your metric.
 func NewId(name string, tags map[string]string) *Id {
-	myTags := make(map[string]string)
+	myTags := make(map[string]string, len(tags))
 	for k, v := range tags {
 		myTags[k] = v
 	}

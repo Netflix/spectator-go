@@ -1,7 +1,8 @@
 package meter
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"time"
 )
@@ -27,7 +28,7 @@ func (t *Timer) MeterId() *Id {
 // Record records the duration this specific event took.
 func (t *Timer) Record(amount time.Duration) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%s:%s:%f", t.meterTypeSymbol, t.id.spectatordId, amount.Seconds())
+		var line = t.meterTypeSymbol + ":" + t.id.spectatordId + ":" + strconv.FormatFloat(amount.Seconds(), 'f', 6, 64)
 		t.writer.Write(line)
 	}
 }
