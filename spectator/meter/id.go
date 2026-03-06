@@ -2,6 +2,7 @@ package meter
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -80,12 +81,7 @@ func (id *Id) MapKey() string {
 // NewId generates a new *Id from the metric name, and the tags you want to
 // include on your metric.
 func NewId(name string, tags map[string]string) *Id {
-	myTags := make(map[string]string, len(tags))
-	for k, v := range tags {
-		myTags[k] = v
-	}
-
-	return newId(name, myTags)
+	return newId(name, maps.Clone(tags))
 }
 
 // newId creates a new *Id taking ownership of the provided tags map (no copy).
@@ -102,11 +98,7 @@ func newId(name string, tags map[string]string) *Id {
 // WithTag creates a deep copy of the *Id, adding the requested tag to the
 // internal collection.
 func (id *Id) WithTag(key string, value string) *Id {
-	newTags := make(map[string]string, len(id.tags)+1)
-
-	for k, v := range id.tags {
-		newTags[k] = v
-	}
+	newTags := maps.Clone(id.tags)
 	newTags[key] = value
 
 	return newId(id.name, newTags)
@@ -135,15 +127,8 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 		return id
 	}
 
-	newTags := make(map[string]string, len(id.tags)+len(tags))
-
-	for k, v := range id.tags {
-		newTags[k] = v
-	}
-
-	for k, v := range tags {
-		newTags[k] = v
-	}
+	newTags := maps.Clone(id.tags)
+	maps.Copy(newTags, tags)
 	return newId(id.name, newTags)
 }
 
