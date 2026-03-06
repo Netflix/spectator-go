@@ -41,3 +41,9 @@ func (g *Gauge) MeterId() *Id {
 func (g *Gauge) Set(value float64) {
 	g.writer.Write(g.linePrefix + strconv.FormatFloat(value, 'f', 6, 64))
 }
+
+// SetInt records the current value as an integer, avoiding the overhead of
+// float64 conversion and formatting.
+func (g *Gauge) SetInt(value int64) {
+	g.writer.Write(g.linePrefix + strconv.FormatInt(value, 10))
+}

@@ -145,6 +145,26 @@ func BenchmarkGauge_Set(b *testing.B) {
 	}
 }
 
+func BenchmarkGauge_SetInt(b *testing.B) {
+	id := NewId("test.gauge", map[string]string{"app": "myapp", "region": "us-east-1", "env": "prod"})
+	g := NewGauge(id, noopWriter)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		g.SetInt(42)
+	}
+}
+
+func BenchmarkGauge_Set_IntValue(b *testing.B) {
+	id := NewId("test.gauge", map[string]string{"app": "myapp", "region": "us-east-1", "env": "prod"})
+	g := NewGauge(id, noopWriter)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		g.Set(float64(42))
+	}
+}
+
 func BenchmarkGauge_VaryingTags(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
