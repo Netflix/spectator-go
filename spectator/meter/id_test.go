@@ -100,6 +100,127 @@ func TestId_WithTags(t *testing.T) {
 	}
 }
 
+func TestTagPairs_clone(t *testing.T) {
+	tests := map[string]struct {
+		input      tagPairs
+		extraPairs int
+		wantLen    int
+		wantCap    int
+	}{
+		"nil":            {input: nil, extraPairs: 0, wantLen: 0, wantCap: 0},
+		"empty":          {input: tagPairs{}, extraPairs: 0, wantLen: 0, wantCap: 0},
+		"extra capacity": {input: tagPairs{{key: "a", value: "1"}}, extraPairs: 3, wantLen: 1, wantCap: 4},
+		"zero extra":     {input: tagPairs{{key: "a", value: "1"}}, extraPairs: 0, wantLen: 1, wantCap: 1},
+		"multiple":       {input: tagPairs{{key: "a", value: "1"}, {key: "b", value: "2"}}, extraPairs: 1, wantLen: 2, wantCap: 3},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			cloned := tt.input.clone(tt.extraPairs)
+			if len(cloned) != tt.wantLen {
+				t.Errorf("len = %d, want %d", len(cloned), tt.wantLen)
+			}
+			if cap(cloned) != tt.wantCap {
+				t.Errorf("cap = %d, want %d", cap(cloned), tt.wantCap)
+			}
+		})
+	}
+}
+
+func TestTagPairs_clone_independent(t *testing.T) {
+	orig := tagPairs{{key: "a", value: "1"}}
+	cloned := orig.clone(0)
+	cloned[0].value = "changed"
+	if orig[0].value != "1" {
+		t.Errorf("clone mutated original: got %q, want %q", orig[0].value, "1")
+	}
+}
+
+func TestTagPairs_upsert(t *testing.T) {
+	tests := map[string]struct {
+		input    tagPairs
+		key      string
+		value    string
+		wantLen  int
+		wantTags map[string]string
+	}{
+		"nil append": {
+			input: nil, key: "a", value: "1",
+			wantLen: 1, wantTags: map[string]string{"a": "1"},
+		},
+		"empty append": {
+			input: tagPairs{}, key: "a", value: "1",
+			wantLen: 1, wantTags: map[string]string{"a": "1"},
+		},
+		"append new": {
+			input: tagPairs{{key: "a", value: "1"}}, key: "b", value: "2",
+			wantLen: 2, wantTags: map[string]string{"a": "1", "b": "2"},
+		},
+		"update existing": {
+			input: tagPairs{{key: "a", value: "1"}, {key: "b", value: "2"}}, key: "a", value: "replaced",
+			wantLen: 2, wantTags: map[string]string{"a": "replaced", "b": "2"},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := tt.input.upsert(tt.key, tt.value)
+			if len(result) != tt.wantLen {
+				t.Errorf("len = %d, want %d", len(result), tt.wantLen)
+			}
+			if got := result.toMap(); !reflect.DeepEqual(got, tt.wantTags) {
+				t.Errorf("toMap = %v, want %v", got, tt.wantTags)
+			}
+		})
+	}
+}
+
+func TestTagPairs_sorted(t *testing.T) {
+	tests := map[string]struct {
+		input tagPairs
+		want  []tagPair
+	}{
+		"nil":      {input: nil, want: []tagPair{}},
+		"empty":    {input: tagPairs{}, want: []tagPair{}},
+		"single":   {input: tagPairs{{key: "a", value: "1"}}, want: []tagPair{{key: "a", value: "1"}}},
+		"reversed": {input: tagPairs{{key: "c", value: "3"}, {key: "a", value: "1"}, {key: "b", value: "2"}}, want: []tagPair{{key: "a", value: "1"}, {key: "b", value: "2"}, {key: "c", value: "3"}}},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := tt.input.sorted()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("sorted = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTagPairs_sorted_does_not_mutate(t *testing.T) {
+	orig := tagPairs{{key: "c", value: "3"}, {key: "a", value: "1"}}
+	_ = orig.sorted()
+	if orig[0].key != "c" {
+		t.Errorf("sorted mutated original: first key = %q, want %q", orig[0].key, "c")
+	}
+}
+
+func TestTagPairs_toMap(t *testing.T) {
+	tests := map[string]struct {
+		input tagPairs
+		want  map[string]string
+	}{
+		"nil":      {input: nil, want: map[string]string{}},
+		"empty":    {input: tagPairs{}, want: map[string]string{}},
+		"single":   {input: tagPairs{{key: "a", value: "1"}}, want: map[string]string{"a": "1"}},
+		"multiple": {input: tagPairs{{key: "a", value: "1"}, {key: "b", value: "2"}}, want: map[string]string{"a": "1", "b": "2"}},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := tt.input.toMap()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("toMap = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestId_WithTag(t *testing.T) {
 	tests := map[string]struct {
 		baseTags     map[string]string
@@ -148,40 +269,45 @@ func TestId_WithTag_DoesNotMutateOriginal(t *testing.T) {
 	}
 }
 
-func TestToSpectatorIdFromFlat_InvalidTags(t *testing.T) {
+func TestToSpectatorIdFromPairs_InvalidTags(t *testing.T) {
 	name := "test`!@#$%^&*()-=~_+[]{}\\|;:'\",<.>/?foo"
-	flat := []string{"tag1,:=", "value1,:=", "tag2,;=", "value2,;="}
-	result := toSpectatorIdFromFlat(name, flat)
+	tags := tagPairs{
+		{key: "tag1,:=", value: "value1,:="},
+		{key: "tag2,;=", value: "value2,;="},
+	}
+	result := toSpectatorIdFromPairs(name, tags)
 
-	// Tags appear in insertion order (flat slice), so order is deterministic.
+	// Tags appear in insertion order, so order is deterministic.
 	expected := "test______^____-_~______________.___foo,tag1___=value1___,tag2___=value2___"
 	if result != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
 	}
 }
 
-func TestToSpectatorIdFromFlat(t *testing.T) {
+func TestToSpectatorIdFromPairs(t *testing.T) {
 	tests := map[string]struct {
 		metric   string
-		flatTags []string
+		tags     tagPairs
 		expected string
 	}{
-		"no tags":        {metric: "test", flatTags: nil, expected: "test"},
-		"empty tags":     {metric: "test", flatTags: []string{}, expected: "test"},
-		"one tag":        {metric: "test", flatTags: []string{"k1", "v1"}, expected: "test,k1=v1"},
-		"two tags":       {metric: "test", flatTags: []string{"k1", "v1", "k2", "v2"}, expected: "test,k1=v1,k2=v2"},
-		"sanitized name": {metric: "test!@#", flatTags: nil, expected: "test___"},
-		"sanitized tags": {metric: "test", flatTags: []string{"k!ey", "v@lue"}, expected: "test,k_ey=v_lue"},
+		"no tags":        {metric: "test", tags: nil, expected: "test"},
+		"empty tags":     {metric: "test", tags: tagPairs{}, expected: "test"},
+		"one tag":        {metric: "test", tags: tagPairs{{key: "k1", value: "v1"}}, expected: "test,k1=v1"},
+		"two tags":       {metric: "test", tags: tagPairs{{key: "k1", value: "v1"}, {key: "k2", value: "v2"}}, expected: "test,k1=v1,k2=v2"},
+		"sanitized name": {metric: "test!@#", tags: nil, expected: "test___"},
+		"sanitized tags": {metric: "test", tags: tagPairs{{key: "k!ey", value: "v@lue"}}, expected: "test,k_ey=v_lue"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			result := toSpectatorIdFromFlat(tt.metric, tt.flatTags)
+			result := toSpectatorIdFromPairs(tt.metric, tt.tags)
 			if result != tt.expected {
 				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
 			}
 		})
 	}
 }
+
+var benchSinkString string
 
 var benchName = "my.metric.with_a_fairly_long_name.and.some.invalid.chars!@#"
 var benchTags = map[string]string{
@@ -220,18 +346,18 @@ func BenchmarkToSpectatorId(b *testing.B) {
 
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		_ = originalToSpectatorId(benchName, benchTags)
+		benchSinkString = originalToSpectatorId(benchName, benchTags)
 	}
 }
 
-func BenchmarkToSpectatorIdFromFlat(b *testing.B) {
-	flat := make([]string, 0, 2*len(benchTags))
+func BenchmarkToSpectatorIdFromPairs(b *testing.B) {
+	tags := make(tagPairs, 0, len(benchTags))
 	for k, v := range benchTags {
-		flat = append(flat, k, v)
+		tags = append(tags, tagPair{key: k, value: v})
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_ = toSpectatorIdFromFlat(benchName, flat)
+		benchSinkString = toSpectatorIdFromPairs(benchName, tags)
 	}
 }

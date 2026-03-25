@@ -8,7 +8,7 @@ import (
 )
 
 // BenchmarkCounterAddCombined measures a combined meter creation and write path:
-// NewId (tag copy + toSpectatorIdFromFlat) → NewCounter → Add (writeLineInt + writer.Write).
+// NewId (tag copy + toSpectatorIdFromPairs) → NewCounter → Add (writeLineInt + writer.Write).
 func BenchmarkCounterAddCombined(b *testing.B) {
 	w := &writer.NoopWriter{}
 	tags := map[string]string{

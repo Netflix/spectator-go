@@ -18,15 +18,21 @@ var byteBufPool = sync.Pool{
 	},
 }
 
+func appendLinePrefix(dst []byte, symbol string, spectatordId string) []byte {
+	dst = append(dst, symbol...)
+	dst = append(dst, ':')
+	dst = append(dst, spectatordId...)
+	dst = append(dst, ':')
+	return dst
+}
+
 // writeLineInt writes "symbol:spectatordId:val" to w using a pooled buffer,
 // replacing fmt.Sprintf("%s:%s:%d", ...) with zero-alloc integer formatting.
 func writeLineInt(w writer.Writer, symbol string, spectatordId string, val int64) {
 	bp := byteBufPool.Get().(*[]byte)
-	b := append((*bp)[:0], symbol...)
-	b = append(b, ':')
-	b = append(b, spectatordId...)
-	b = append(b, ':')
+	b := appendLinePrefix((*bp)[:0], symbol, spectatordId)
 	b = strconv.AppendInt(b, val, 10)
+	// Use Write to preserve buffering behavior in wrapped writers.
 	w.Write(string(b))
 	*bp = b
 	byteBufPool.Put(bp)
@@ -36,11 +42,9 @@ func writeLineInt(w writer.Writer, symbol string, spectatordId string, val int64
 // replacing fmt.Sprintf("%s:%s:%f", ...) with zero-alloc float formatting.
 func writeLineFloat(w writer.Writer, symbol string, spectatordId string, val float64) {
 	bp := byteBufPool.Get().(*[]byte)
-	b := append((*bp)[:0], symbol...)
-	b = append(b, ':')
-	b = append(b, spectatordId...)
-	b = append(b, ':')
+	b := appendLinePrefix((*bp)[:0], symbol, spectatordId)
 	b = strconv.AppendFloat(b, val, 'f', 6, 64)
+	// Use Write to preserve buffering behavior in wrapped writers.
 	w.Write(string(b))
 	*bp = b
 	byteBufPool.Put(bp)
@@ -50,11 +54,9 @@ func writeLineFloat(w writer.Writer, symbol string, spectatordId string, val flo
 // replacing fmt.Sprintf("%s:%s:%d", ...) with zero-alloc uint formatting.
 func writeLineUint(w writer.Writer, symbol string, spectatordId string, val uint64) {
 	bp := byteBufPool.Get().(*[]byte)
-	b := append((*bp)[:0], symbol...)
-	b = append(b, ':')
-	b = append(b, spectatordId...)
-	b = append(b, ':')
+	b := appendLinePrefix((*bp)[:0], symbol, spectatordId)
 	b = strconv.AppendUint(b, val, 10)
+	// Use Write to preserve buffering behavior in wrapped writers.
 	w.Write(string(b))
 	*bp = b
 	byteBufPool.Put(bp)
