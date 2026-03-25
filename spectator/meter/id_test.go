@@ -100,48 +100,86 @@ func TestId_WithTags(t *testing.T) {
 	}
 }
 
-func TestToSpectatorId(t *testing.T) {
-	name := "test"
-	tags := map[string]string{
-		"tag1": "value1",
-		"tag2": "value2",
+func TestId_WithTag(t *testing.T) {
+	tests := map[string]struct {
+		baseTags     map[string]string
+		key          string
+		value        string
+		expectedTags map[string]string
+	}{
+		"add new key": {
+			baseTags:     map[string]string{"a": "1"},
+			key:          "b",
+			value:        "2",
+			expectedTags: map[string]string{"a": "1", "b": "2"},
+		},
+		"replace existing key": {
+			baseTags:     map[string]string{"a": "1", "b": "2"},
+			key:          "a",
+			value:        "replaced",
+			expectedTags: map[string]string{"a": "replaced", "b": "2"},
+		},
+		"no existing tags": {
+			baseTags:     nil,
+			key:          "a",
+			value:        "1",
+			expectedTags: map[string]string{"a": "1"},
+		},
 	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			id := NewId("foo", tt.baseTags)
+			id2 := id.WithTag(tt.key, tt.value)
 
-	// The order of the tags is not guaranteed
-	expected1 := "test,tag1=value1,tag2=value2"
-	expected2 := "test,tag2=value2,tag1=value1"
-	result := toSpectatorId(name, tags)
-
-	if result != expected1 && result != expected2 {
-		t.Errorf("Expected '%s' or '%s', got '%s'", expected1, expected2, result)
+			if !reflect.DeepEqual(tt.expectedTags, id2.Tags()) {
+				t.Errorf("Expected %v, got %v", tt.expectedTags, id2.Tags())
+			}
+		})
 	}
 }
 
-func TestToSpectatorId_EmptyTags(t *testing.T) {
-	name := "test"
-	tags := map[string]string{}
+func TestId_WithTag_DoesNotMutateOriginal(t *testing.T) {
+	id := NewId("foo", map[string]string{"a": "1"})
+	_ = id.WithTag("b", "2")
 
-	expected := "test"
-	result := toSpectatorId(name, tags)
+	expected := map[string]string{"a": "1"}
+	if !reflect.DeepEqual(expected, id.Tags()) {
+		t.Errorf("Original mutated: expected %v, got %v", expected, id.Tags())
+	}
+}
 
+func TestToSpectatorIdFromFlat_InvalidTags(t *testing.T) {
+	name := "test`!@#$%^&*()-=~_+[]{}\\|;:'\",<.>/?foo"
+	flat := []string{"tag1,:=", "value1,:=", "tag2,;=", "value2,;="}
+	result := toSpectatorIdFromFlat(name, flat)
+
+	// Tags appear in insertion order (flat slice), so order is deterministic.
+	expected := "test______^____-_~______________.___foo,tag1___=value1___,tag2___=value2___"
 	if result != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, result)
 	}
 }
 
-func TestToSpectatorId_InvalidTags(t *testing.T) {
-	name := "test`!@#$%^&*()-=~_+[]{}\\|;:'\",<.>/?foo"
-	tags := map[string]string{
-		"tag1,:=": "value1,:=",
-		"tag2,;=": "value2,;=",
+func TestToSpectatorIdFromFlat(t *testing.T) {
+	tests := map[string]struct {
+		metric   string
+		flatTags []string
+		expected string
+	}{
+		"no tags":        {metric: "test", flatTags: nil, expected: "test"},
+		"empty tags":     {metric: "test", flatTags: []string{}, expected: "test"},
+		"one tag":        {metric: "test", flatTags: []string{"k1", "v1"}, expected: "test,k1=v1"},
+		"two tags":       {metric: "test", flatTags: []string{"k1", "v1", "k2", "v2"}, expected: "test,k1=v1,k2=v2"},
+		"sanitized name": {metric: "test!@#", flatTags: nil, expected: "test___"},
+		"sanitized tags": {metric: "test", flatTags: []string{"k!ey", "v@lue"}, expected: "test,k_ey=v_lue"},
 	}
-
-	expected1 := "test______^____-_~______________.___foo,tag1___=value1___,tag2___=value2___"
-	expected2 := "test______^____-_~______________.___foo,tag2___=value2___,tag1___=value1___"
-	result := toSpectatorId(name, tags)
-
-	if result != expected1 && result != expected2 {
-		t.Errorf("Expected '%s' or '%s', got '%s'", expected1, expected2, result)
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := toSpectatorIdFromFlat(tt.metric, tt.flatTags)
+			if result != tt.expected {
+				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
+			}
+		})
 	}
 }
 
@@ -186,9 +224,14 @@ func BenchmarkToSpectatorId(b *testing.B) {
 	}
 }
 
-func BenchmarkToSpectatorIdBuilder(b *testing.B) {
+func BenchmarkToSpectatorIdFromFlat(b *testing.B) {
+	flat := make([]string, 0, 2*len(benchTags))
+	for k, v := range benchTags {
+		flat = append(flat, k, v)
+	}
 	b.ReportAllocs()
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_ = toSpectatorId(benchName, benchTags)
+		_ = toSpectatorIdFromFlat(benchName, flat)
 	}
 }
