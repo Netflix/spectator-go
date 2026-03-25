@@ -1,7 +1,6 @@
 package meter
 
 import (
-	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -35,6 +34,5 @@ func (c *MonotonicCounterUint) MeterId() *Id {
 
 // Set sets a value as the current measurement; spectatord calculates the delta.
 func (c *MonotonicCounterUint) Set(value uint64) {
-	var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, value)
-	c.writer.Write(line)
+	writeLineUint(c.writer, c.meterTypeSymbol, c.id.spectatordId, value)
 }

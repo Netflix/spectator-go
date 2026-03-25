@@ -1,7 +1,6 @@
 package meter
 
 import (
-	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -32,7 +31,6 @@ func (d *DistributionSummary) MeterId() *Id {
 // Record records a value to track within the distribution.
 func (d *DistributionSummary) Record(amount int64) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%s:%s:%d", d.meterTypeSymbol, d.id.spectatordId, amount)
-		d.writer.Write(line)
+		writeLineInt(d.writer, d.meterTypeSymbol, d.id.spectatordId, amount)
 	}
 }

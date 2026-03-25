@@ -28,16 +28,6 @@ var builderPool = sync.Pool{
 	},
 }
 
-// spectatorIdBufPool holds reusable byte-slice buffers for toSpectatorIdFromFlat.
-// Using *[]byte (not strings.Builder) so we can preserve capacity across calls
-// by resetting to len=0 without clearing the backing array.
-var spectatorIdBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, 0, 256)
-		return &b
-	},
-}
-
 // MapKey computes and saves a key within the struct to be used to uniquely
 // identify this *Id in a map. This does use the information from within the
 // *Id, so it assumes you've not accidentally double-declared this *Id.
@@ -199,7 +189,7 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 // [k1, v1, k2, v2, ...] tag slice. Reuses a pooled buffer to avoid builder
 // growth allocations; the only allocation is the returned string.
 func toSpectatorIdFromFlat(name string, flatTags []string) string {
-	bp := spectatorIdBufPool.Get().(*[]byte)
+	bp := byteBufPool.Get().(*[]byte)
 	b := (*bp)[:0]
 
 	b = appendSanitized(b, name)
@@ -213,7 +203,7 @@ func toSpectatorIdFromFlat(name string, flatTags []string) string {
 
 	result := string(b)
 	*bp = b
-	spectatorIdBufPool.Put(bp)
+	byteBufPool.Put(bp)
 	return result
 }
 
