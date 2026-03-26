@@ -7,10 +7,64 @@ import (
 	"sync"
 )
 
+type tagPair struct {
+	key   string
+	value string
+}
+
+type tagPairs []tagPair
+
+func newTagPairs(tags map[string]string) tagPairs {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	flat := make(tagPairs, 0, len(tags))
+	for k, v := range tags {
+		flat = append(flat, tagPair{key: k, value: v})
+	}
+	return flat
+}
+
+func (tags tagPairs) clone(extraPairs int) tagPairs {
+	cloned := make(tagPairs, len(tags), len(tags)+extraPairs)
+	copy(cloned, tags)
+	return cloned
+}
+
+func (tags tagPairs) upsert(key string, value string) tagPairs {
+	for i := range tags {
+		if tags[i].key == key {
+			tags[i].value = value
+			return tags
+		}
+	}
+	return append(tags, tagPair{key: key, value: value})
+}
+
+func (tags tagPairs) sorted() []tagPair {
+	pairs := make([]tagPair, len(tags))
+	copy(pairs, tags)
+	sort.Slice(pairs, func(i int, j int) bool {
+		return pairs[i].key < pairs[j].key
+	})
+	return pairs
+}
+
+func (tags tagPairs) toMap() map[string]string {
+	m := make(map[string]string, len(tags))
+	for i := range tags {
+		m[tags[i].key] = tags[i].value
+	}
+	return m
+}
+
 // Id represents a meter's identifying information and dimensions (tags).
 type Id struct {
 	name string
-	tags map[string]string
+	// tags stores key/value pairs in a slice to avoid the allocation overhead
+	// of a map while keeping the representation explicit.
+	tags tagPairs
 	// keyOnce protects access to key, allowing it to be computed on demand
 	// without racing other readers.
 	keyOnce sync.Once
@@ -19,7 +73,7 @@ type Id struct {
 	spectatordId string
 }
 
-var builderPool = &sync.Pool{
+var builderPool = sync.Pool{
 	New: func() interface{} {
 		return &strings.Builder{}
 	},
@@ -46,19 +100,18 @@ func (id *Id) MapKey() string {
 			if err != nil {
 				return errKey
 			}
-			keys := make([]string, 0, len(id.tags))
-			for k := range id.tags {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
 
-			for _, k := range keys {
-				v := id.tags[k]
+			pairs := id.tags.sorted()
+			if len(pairs) == 0 {
+				return buf.String()
+			}
+
+			for i := range pairs {
 				_, err = buf.WriteRune('|')
 				if err != nil {
 					return errKey
 				}
-				_, err = buf.WriteString(k)
+				_, err = buf.WriteString(pairs[i].key)
 				if err != nil {
 					return errKey
 				}
@@ -66,7 +119,7 @@ func (id *Id) MapKey() string {
 				if err != nil {
 					return errKey
 				}
-				_, err = buf.WriteString(v)
+				_, err = buf.WriteString(pairs[i].value)
 				if err != nil {
 					return errKey
 				}
@@ -80,33 +133,34 @@ func (id *Id) MapKey() string {
 // NewId generates a new *Id from the metric name, and the tags you want to
 // include on your metric.
 func NewId(name string, tags map[string]string) *Id {
-	myTags := make(map[string]string)
-	for k, v := range tags {
-		myTags[k] = v
-	}
+	pairs := newTagPairs(tags)
 
 	return &Id{
 		name:         name,
-		tags:         myTags,
-		spectatordId: toSpectatorId(name, tags),
+		tags:         pairs,
+		spectatordId: toSpectatorIdFromPairs(name, pairs),
+	}
+}
+
+// newIdFromPairs creates an *Id directly from a pre-built tag slice,
+// avoiding an intermediate map allocation. Used by WithTag and WithTags.
+func newIdFromPairs(name string, tags tagPairs) *Id {
+	return &Id{
+		name:         name,
+		tags:         tags,
+		spectatordId: toSpectatorIdFromPairs(name, tags),
 	}
 }
 
 // WithTag creates a deep copy of the *Id, adding the requested tag to the
 // internal collection.
 func (id *Id) WithTag(key string, value string) *Id {
-	newTags := make(map[string]string)
-
-	for k, v := range id.tags {
-		newTags[k] = v
-	}
-	newTags[key] = value
-
-	return NewId(id.name, newTags)
+	newTags := id.tags.clone(1).upsert(key, value)
+	return newIdFromPairs(id.name, newTags)
 }
 
 func (id *Id) String() string {
-	return fmt.Sprintf("Id{name=%s,tags=%v}", id.name, id.tags)
+	return fmt.Sprintf("Id{name=%s,tags=%v}", id.name, id.Tags())
 }
 
 // Name exposes the internal metric name field.
@@ -114,10 +168,10 @@ func (id *Id) Name() string {
 	return id.name
 }
 
-// Tags directly exposes the internal tags map. This is not a copy of the map,
-// so any modifications to it will be observed by the *Id.
+// Tags returns a new map containing the identifier's tags. Each call allocates
+// a fresh map; mutating the returned map does not affect the *Id.
 func (id *Id) Tags() map[string]string {
-	return id.tags
+	return id.tags.toMap()
 }
 
 // WithTags takes a map of tags, and returns a deep copy of *Id with the new
@@ -128,29 +182,27 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 		return id
 	}
 
-	newTags := make(map[string]string)
-
-	for k, v := range id.tags {
-		newTags[k] = v
-	}
-
+	newTags := id.tags.clone(len(tags))
 	for k, v := range tags {
-		newTags[k] = v
+		newTags = newTags.upsert(k, v)
 	}
-	return NewId(id.name, newTags)
+	return newIdFromPairs(id.name, newTags)
 }
 
-func toSpectatorId(name string, tags map[string]string) string {
+// toSpectatorIdFromPairs builds the spectatord line-protocol name from tag
+// pairs. Reuses a pooled buffer to avoid builder
+// growth allocations; the only allocation is the returned string.
+func toSpectatorIdFromPairs(name string, tags tagPairs) string {
 	bp := byteBufPool.Get().(*[]byte)
 	b := (*bp)[:0]
 
 	b = appendSanitized(b, name)
 
-	for k, v := range tags {
+	for i := range tags {
 		b = append(b, ',')
-		b = appendSanitized(b, k)
+		b = appendSanitized(b, tags[i].key)
 		b = append(b, '=')
-		b = appendSanitized(b, v)
+		b = appendSanitized(b, tags[i].value)
 	}
 
 	result := string(b)
@@ -159,12 +211,15 @@ func toSpectatorId(name string, tags map[string]string) string {
 	return result
 }
 
+// appendSanitized appends the sanitized form of input to dst and returns the
+// extended slice. Every rune that passes isValidCharacter (all ASCII single-byte)
+// is appended directly; invalid runes become '_'.
 func appendSanitized(dst []byte, input string) []byte {
 	for _, r := range input {
-		if !isValidCharacter(r) {
-			dst = append(dst, '_')
-		} else {
+		if isValidCharacter(r) {
 			dst = append(dst, byte(r))
+		} else {
+			dst = append(dst, '_')
 		}
 	}
 	return dst
