@@ -7,14 +7,39 @@ import (
 )
 
 type UdpWriter struct {
-	conn             *net.UDPConn
-	logger           logger.Logger
+	raw              *rawUDPWriter
 	lineBuffer       *LineBuffer
 	lowLatencyBuffer *LowLatencyBuffer
 }
 
-type udpBufferWriter struct {
-	*UdpWriter
+type rawUDPWriter struct {
+	conn   *net.UDPConn
+	logger logger.Logger
+}
+
+func (u *rawUDPWriter) Write(line string) {
+	u.WriteString(line)
+}
+
+func (u *rawUDPWriter) WriteBytes(line []byte) {
+	_, err := u.conn.Write(line)
+	if err != nil {
+		u.logger.Errorf("Error writing to UDP: %s", err)
+	}
+}
+
+func (u *rawUDPWriter) WriteString(line string) {
+	_, err := u.conn.Write([]byte(line))
+	if err != nil {
+		u.logger.Errorf("Error writing to UDP: %s", err)
+	}
+}
+
+func (u *rawUDPWriter) Close() error {
+	if u.conn != nil {
+		return u.conn.Close()
+	}
+	return nil
 }
 
 func NewUdpWriter(address string, logger logger.Logger) (*UdpWriter, error) {
@@ -32,17 +57,24 @@ func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int
 		return nil, err
 	}
 
-	baseWriter := &UdpWriter{
+	raw := &rawUDPWriter{
 		conn:   conn,
 		logger: logger,
+	}
+	baseWriter := &UdpWriter{
+		raw: raw,
 	}
 
 	var lineBuffer *LineBuffer
 	var lowLatencyBuffer *LowLatencyBuffer
 	if bufferSize > 0 && bufferSize <= 65536 {
-		lineBuffer = NewLineBuffer(&udpBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
+		// Buffers flush through the raw socket writer, not UdpWriter, to avoid
+		// re-entering buffering logic on WriteBytes/WriteString.
+		lineBuffer = NewLineBuffer(raw, logger, bufferSize, flushInterval)
 	} else if bufferSize > 0 {
-		lowLatencyBuffer = NewLowLatencyBuffer(&udpBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
+		// Buffers flush through the raw socket writer, not UdpWriter, to avoid
+		// re-entering buffering logic on WriteBytes/WriteString.
+		lowLatencyBuffer = NewLowLatencyBuffer(raw, logger, bufferSize, flushInterval)
 	}
 	baseWriter.lineBuffer = lineBuffer
 	baseWriter.lowLatencyBuffer = lowLatencyBuffer
@@ -51,7 +83,7 @@ func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int
 }
 
 func (u *UdpWriter) Write(line string) {
-	u.logger.Debugf("Sending line: %s", line)
+	u.raw.logger.Debugf("Sending line: %s", line)
 
 	if u.lineBuffer != nil {
 		u.lineBuffer.Write(line)
@@ -63,21 +95,25 @@ func (u *UdpWriter) Write(line string) {
 		return
 	}
 
-	u.WriteString(line)
+	u.raw.WriteString(line)
 }
 
 func (u *UdpWriter) WriteBytes(line []byte) {
-	_, err := u.conn.Write(line)
-	if err != nil {
-		u.logger.Errorf("Error writing to UDP: %s", err)
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteBytes(line)
+		return
 	}
+
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteBytes(line)
+		return
+	}
+
+	u.raw.WriteBytes(line)
 }
 
 func (u *UdpWriter) WriteString(line string) {
-	_, err := u.conn.Write([]byte(line))
-	if err != nil {
-		u.logger.Errorf("Error writing to UDP: %s", err)
-	}
+	u.raw.WriteString(line)
 }
 
 func (u *UdpWriter) Close() error {
@@ -92,9 +128,5 @@ func (u *UdpWriter) Close() error {
 	}
 
 	// Close the connection, if it exists
-	if u.conn != nil {
-		return u.conn.Close()
-	}
-
-	return nil
+	return u.raw.Close()
 }

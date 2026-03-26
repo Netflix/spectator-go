@@ -34,10 +34,11 @@ type bufferShard struct {
 	mu            sync.Mutex
 }
 
-// getChunkIndexForLine returns the chunkIndex that should be used for storing the line, or -1, if there is
-// an overflow and the line cannot be stored in the bufferShard.
-func (b *bufferShard) getChunkIndexForLine(line []byte) int {
-	totalWriteLength := len(line)
+// getChunkIndexForLength returns the chunkIndex that should be used for storing
+// a line of the given length, or -1 if there is an overflow and the line
+// cannot be stored in the bufferShard.
+func (b *bufferShard) getChunkIndexForLength(lineLen int) int {
+	totalWriteLength := lineLen
 
 	// All chunks are full for the shard, drop the data
 	if b.chunkIndex >= len(b.data) {
@@ -47,7 +48,7 @@ func (b *bufferShard) getChunkIndexForLine(line []byte) int {
 	}
 
 	// This should not happen, drop the data. The maximum length of a well-formed protocol line is 3.8KB.
-	if len(line) > chunkSize {
+	if lineLen > chunkSize {
 		b.overflows++
 		b.overflowBytes += int64(totalWriteLength)
 		return -1
@@ -158,21 +159,51 @@ func (llb *LowLatencyBuffer) Write(line string) {
 	// Add the line to the appropriate chunk in the buffer shard, or drop, if it overflows
 	buffer.mu.Lock()
 	defer buffer.mu.Unlock()
-	lineBytes := []byte(line)
 
 	// Check if current chunk can fit the new data
-	idx := buffer.getChunkIndexForLine(lineBytes)
+	idx := buffer.getChunkIndexForLength(len(line))
 	if idx == -1 {
-		// overflows (drops) are counted in getChunkIndexForLine, for metric reporting
+		// overflows (drops) are counted in getChunkIndexForLength, for metric reporting
 		return
 	}
 
 	// We can write to the selected chunk
 	if len(buffer.data[buffer.chunkIndex]) > 0 {
 		// buffer has data, so add the separator, to indicate the end of the previous line
-		buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], []byte(separator)...)
+		buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], separator...)
 	}
-	buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], lineBytes...)
+	buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], line...)
+}
+
+func (llb *LowLatencyBuffer) WriteBytes(line []byte) {
+	// Pick a shard index across all shards in the active buffer, with a round-robin distribution
+	shardIndex := int(atomic.AddUint64(&llb.counter, 1)) % len(llb.frontBuffers)
+
+	// Acquire read lock, to check which buffers are active
+	var buffer *bufferShard
+	if llb.useFrontBuffers.Load() {
+		buffer = llb.frontBuffers[shardIndex]
+	} else {
+		buffer = llb.backBuffers[shardIndex]
+	}
+
+	// Add the line to the appropriate chunk in the buffer shard, or drop, if it overflows
+	buffer.mu.Lock()
+	defer buffer.mu.Unlock()
+
+	// Check if current chunk can fit the new data
+	idx := buffer.getChunkIndexForLength(len(line))
+	if idx == -1 {
+		// overflows (drops) are counted in getChunkIndexForLength, for metric reporting
+		return
+	}
+
+	// We can write to the selected chunk
+	if len(buffer.data[buffer.chunkIndex]) > 0 {
+		// buffer has data, so add the separator, to indicate the end of the previous line
+		buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], separator...)
+	}
+	buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], line...)
 }
 
 // flushLoop runs in a separate goroutine and handles buffer swapping and flushing

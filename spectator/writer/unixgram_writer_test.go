@@ -211,3 +211,45 @@ func TestUnixgramWriter_LineBuffer_Write(t *testing.T) {
 	// Allow time for messages to deliver
 	time.Sleep(2 * time.Millisecond)
 }
+
+func TestUnixgramWriter_LineBuffer_WriteBytes(t *testing.T) {
+	// Create server
+	server, msgCh, serverErr := newUnixgramServer()
+	if serverErr != nil {
+		t.Fatalf("Failed to create unixgram server: %v", serverErr)
+	}
+	defer server.Close()
+
+	// Create writer
+	writer, err := NewUnixgramWriterWithBuffer(testUnixgramSocket, logger.NewDefaultLogger(), 20, 5*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+
+	// Write messages and overflow the buffer, to trigger a flush
+	writer.WriteBytes([]byte("message1"))
+	writer.WriteBytes([]byte("message2"))
+	writer.WriteBytes([]byte("message3"))
+
+	expected := "c:spectator-go.lineBuffer.overflows:1"
+	recvMsg, recvErr := readMessage(msgCh)
+	if recvErr != nil {
+		t.Errorf("Failed to receive message: %v", recvErr)
+	}
+	if recvMsg != expected {
+		t.Errorf("Received message '%s' does not match original message '%s'", recvMsg, expected)
+	}
+
+	// This used to deadlock when flush() re-entered the same buffer via WriteBytes.
+	expected = "message1\nmessage2\nmessage3"
+	recvMsg, recvErr = readMessage(msgCh)
+	if recvErr != nil {
+		t.Errorf("Failed to receive message: %v", recvErr)
+	}
+	if recvMsg != expected {
+		t.Errorf("Received message '%s' does not match original message '%s'", recvMsg, expected)
+	}
+
+	// Allow time for messages to deliver
+	time.Sleep(2 * time.Millisecond)
+}

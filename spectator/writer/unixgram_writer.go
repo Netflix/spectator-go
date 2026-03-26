@@ -1,26 +1,58 @@
 package writer
 
 import (
-	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/Netflix/spectator-go/v2/spectator/logger"
 )
 
 type UnixgramWriter struct {
-	addr             *net.UnixAddr
-	conn             *net.UnixConn
-	logger           logger.Logger
+	raw              *rawUnixgramWriter
 	lineBuffer       *LineBuffer
 	lowLatencyBuffer *LowLatencyBuffer
 }
 
-type unixgramBufferWriter struct {
-	*UnixgramWriter
+type rawUnixgramWriter struct {
+	addr   *net.UnixAddr
+	conn   *net.UnixConn
+	logger logger.Logger
+}
+
+func (u *rawUnixgramWriter) Write(line string) {
+	u.WriteString(line)
+}
+
+func (u *rawUnixgramWriter) WriteBytes(line []byte) {
+	if u.conn != nil {
+		if _, err := u.conn.Write(line); err != nil {
+			u.maybeCloseSocket(err)
+		}
+	} else {
+		u.redialSocket()
+	}
+}
+
+func (u *rawUnixgramWriter) WriteString(line string) {
+	if u.conn != nil {
+		if _, err := u.conn.Write([]byte(line)); err != nil {
+			u.maybeCloseSocket(err)
+		}
+	} else {
+		u.redialSocket()
+	}
+}
+
+func (u *rawUnixgramWriter) Close() error {
+	if u.conn != nil {
+		return u.conn.Close()
+	}
+	return nil
 }
 
 func NewUnixgramWriter(path string, logger logger.Logger) (*UnixgramWriter, error) {
-	return NewUnixgramWriterWithBuffer(path, logger, 0, 5 * time.Second)
+	return NewUnixgramWriterWithBuffer(path, logger, 0, 5*time.Second)
 }
 
 func NewUnixgramWriterWithBuffer(path string, logger logger.Logger, bufferSize int, flushInterval time.Duration) (*UnixgramWriter, error) {
@@ -31,18 +63,25 @@ func NewUnixgramWriterWithBuffer(path string, logger logger.Logger, bufferSize i
 		conn = nil
 	}
 
-	baseWriter := &UnixgramWriter{
+	raw := &rawUnixgramWriter{
 		addr:   addr,
 		conn:   conn,
 		logger: logger,
+	}
+	baseWriter := &UnixgramWriter{
+		raw: raw,
 	}
 
 	var lineBuffer *LineBuffer
 	var lowLatencyBuffer *LowLatencyBuffer
 	if bufferSize > 0 && bufferSize <= 65536 {
-		lineBuffer = NewLineBuffer(&unixgramBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
+		// Buffers flush through the raw socket writer, not UnixgramWriter, to avoid
+		// re-entering buffering logic on WriteBytes/WriteString.
+		lineBuffer = NewLineBuffer(raw, logger, bufferSize, flushInterval)
 	} else if bufferSize > 0 {
-		lowLatencyBuffer = NewLowLatencyBuffer(&unixgramBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
+		// Buffers flush through the raw socket writer, not UnixgramWriter, to avoid
+		// re-entering buffering logic on WriteBytes/WriteString.
+		lowLatencyBuffer = NewLowLatencyBuffer(raw, logger, bufferSize, flushInterval)
 	}
 	baseWriter.lineBuffer = lineBuffer
 	baseWriter.lowLatencyBuffer = lowLatencyBuffer
@@ -51,7 +90,7 @@ func NewUnixgramWriterWithBuffer(path string, logger logger.Logger, bufferSize i
 }
 
 func (u *UnixgramWriter) Write(line string) {
-	u.logger.Debugf("Sending line: %s", line)
+	u.raw.logger.Debugf("Sending line: %s", line)
 
 	if u.lineBuffer != nil {
 		u.lineBuffer.Write(line)
@@ -63,27 +102,25 @@ func (u *UnixgramWriter) Write(line string) {
 		return
 	}
 
-	u.WriteString(line)
+	u.raw.WriteString(line)
 }
 
 func (u *UnixgramWriter) WriteBytes(line []byte) {
-	if u.conn != nil {
-		if _, err := u.conn.Write(line); err != nil {
-			u.maybeCloseSocket(err)
-		}
-	} else {
-		u.redialSocket()
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteBytes(line)
+		return
 	}
+
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteBytes(line)
+		return
+	}
+
+	u.raw.WriteBytes(line)
 }
 
 func (u *UnixgramWriter) WriteString(line string) {
-	if u.conn != nil {
-		if _, err := u.conn.Write([]byte(line)); err != nil {
-			u.maybeCloseSocket(err)
-		}
-	} else {
-		u.redialSocket()
-	}
+	u.raw.WriteString(line)
 }
 
 // If anything disturbs access to the unix socket, such as a spectatord process restart (or another
@@ -98,7 +135,7 @@ func (u *UnixgramWriter) WriteString(line string) {
 // The addition of reconnect logic to the UnixgramWriter mitigates ongoing issues with unix socket write
 // errors. Some packet delivery failure will occur until it can reconnect. With the reconnect logic in
 // place, the initialization is now more resilient if the unix socket is not available at program start.
-func (u *UnixgramWriter) maybeCloseSocket(err error) {
+func (u *rawUnixgramWriter) maybeCloseSocket(err error) {
 	u.logger.Errorf("failed to write to unix socket: %v\n", err)
 
 	if strings.Contains(err.Error(), "transport endpoint is not connected") {
@@ -111,7 +148,7 @@ func (u *UnixgramWriter) maybeCloseSocket(err error) {
 	}
 }
 
-func (u *UnixgramWriter) redialSocket() {
+func (u *rawUnixgramWriter) redialSocket() {
 	u.logger.Infof("re-dial unix socket")
 
 	conn, err := net.DialUnix("unixgram", nil, u.addr)
@@ -121,7 +158,6 @@ func (u *UnixgramWriter) redialSocket() {
 		u.conn = conn
 	}
 }
-
 
 func (u *UnixgramWriter) Close() error {
 	// Stop flush timer, and flush remaining lines
@@ -135,9 +171,5 @@ func (u *UnixgramWriter) Close() error {
 	}
 
 	// Close the connection
-	if u.conn != nil {
-		return u.conn.Close()
-	}
-
-	return nil
+	return u.raw.Close()
 }

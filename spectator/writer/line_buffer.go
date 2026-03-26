@@ -1,9 +1,9 @@
 package writer
 
 import (
+	"bytes"
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -13,7 +13,7 @@ type LineBuffer struct {
 	logger logger.Logger
 
 	bufferSize    int
-	buffer        strings.Builder
+	buffer        bytes.Buffer
 	lineCount     int
 	flushInterval time.Duration
 	lastFlush     time.Time
@@ -42,19 +42,13 @@ func NewLineBuffer(writer Writer, logger logger.Logger, bufferSize int, flushInt
 func (lb *LineBuffer) Write(line string) {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
+	lb.writeStringLocked(line)
+}
 
-	if lb.buffer.Len() > 0 {
-		// buffer has data, so add the separator to indicate the end of the previous line
-		lb.buffer.WriteString(separator)
-	}
-
-	lb.buffer.WriteString(line)
-	lb.lineCount++
-
-	if lb.buffer.Len() >= lb.bufferSize {
-		lb.writer.WriteString("c:spectator-go.lineBuffer.overflows:1")
-		lb.flush()
-	}
+func (lb *LineBuffer) WriteBytes(line []byte) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.writeBytesLocked(line)
 }
 
 func (lb *LineBuffer) startFlushTimer() {
@@ -79,11 +73,41 @@ func (lb *LineBuffer) flush() {
 	}
 
 	lb.logger.Debugf("Flushing buffer with %d lines (%d bytes)", lb.lineCount, lb.buffer.Len())
-	lb.writer.WriteString(lb.buffer.String())
+	lb.writer.WriteBytes(lb.buffer.Bytes())
 	lb.writer.WriteString("c:spectator-go.lineBuffer.bytesWritten:" + strconv.Itoa(lb.buffer.Len()))
 	lb.buffer.Reset()
 	lb.lineCount = 0
 	lb.lastFlush = time.Now()
+}
+
+func (lb *LineBuffer) writeBytesLocked(line []byte) {
+	if lb.buffer.Len() > 0 {
+		// buffer has data, so add the separator to indicate the end of the previous line
+		lb.buffer.WriteString(separator)
+	}
+
+	lb.buffer.Write(line)
+	lb.lineCount++
+
+	if lb.buffer.Len() >= lb.bufferSize {
+		lb.writer.WriteString("c:spectator-go.lineBuffer.overflows:1")
+		lb.flush()
+	}
+}
+
+func (lb *LineBuffer) writeStringLocked(line string) {
+	if lb.buffer.Len() > 0 {
+		// buffer has data, so add the separator to indicate the end of the previous line
+		lb.buffer.WriteString(separator)
+	}
+
+	lb.buffer.WriteString(line)
+	lb.lineCount++
+
+	if lb.buffer.Len() >= lb.bufferSize {
+		lb.writer.WriteString("c:spectator-go.lineBuffer.overflows:1")
+		lb.flush()
+	}
 }
 
 func (lb *LineBuffer) Close() {

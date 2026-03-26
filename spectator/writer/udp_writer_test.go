@@ -192,6 +192,48 @@ func TestUdpWriter_LineBuffer_Write(t *testing.T) {
 	}
 }
 
+func TestUdpWriter_LineBuffer_WriteBytes(t *testing.T) {
+	// Start a local UDP server
+	server, err := net.ListenPacket("udp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Could not start UDP server: %v", err)
+	}
+	defer server.Close()
+
+	// Create a new UDP writer
+	writer, err := NewUdpWriterWithBuffer(server.LocalAddr().String(), logger.NewDefaultLogger(), 20, 5*time.Second)
+	if err != nil {
+		t.Fatalf("Could not create UDP writer: %v", err)
+	}
+
+	// Write messages and overflow the buffer, to trigger a flush
+	writer.WriteBytes([]byte("message1"))
+	writer.WriteBytes([]byte("message2"))
+	writer.WriteBytes([]byte("message3"))
+
+	// Read the overflow metric
+	buffer := make([]byte, 50)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second))
+	n, _, err := server.ReadFrom(buffer)
+	if err != nil {
+		t.Fatalf("Could not read from UDP server: %v", err)
+	}
+	if got, expected := string(buffer[:n]), "c:spectator-go.lineBuffer.overflows:1"; got != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, got)
+	}
+
+	// Read the flushed payload. This used to deadlock when flush() re-entered the buffer.
+	buffer = make([]byte, 50)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second))
+	n, _, err = server.ReadFrom(buffer)
+	if err != nil {
+		t.Fatalf("Could not read from UDP server: %v", err)
+	}
+	if got, expected := string(buffer[:n]), "message1\nmessage2\nmessage3"; got != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, got)
+	}
+}
+
 func TestConcurrentWrites(t *testing.T) {
 	messagesPerThread := 1000
 	writerThreadCount := 4

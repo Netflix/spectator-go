@@ -32,8 +32,7 @@ func writeLineInt(w writer.Writer, symbol string, spectatordId string, val int64
 	bp := byteBufPool.Get().(*[]byte)
 	b := appendLinePrefix((*bp)[:0], symbol, spectatordId)
 	b = strconv.AppendInt(b, val, 10)
-	// Use Write to preserve buffering behavior in wrapped writers.
-	w.Write(string(b))
+	w.WriteBytes(b)
 	*bp = b
 	byteBufPool.Put(bp)
 }
@@ -44,8 +43,7 @@ func writeLineFloat(w writer.Writer, symbol string, spectatordId string, val flo
 	bp := byteBufPool.Get().(*[]byte)
 	b := appendLinePrefix((*bp)[:0], symbol, spectatordId)
 	b = strconv.AppendFloat(b, val, 'f', 6, 64)
-	// Use Write to preserve buffering behavior in wrapped writers.
-	w.Write(string(b))
+	w.WriteBytes(b)
 	*bp = b
 	byteBufPool.Put(bp)
 }
@@ -56,8 +54,7 @@ func writeLineUint(w writer.Writer, symbol string, spectatordId string, val uint
 	bp := byteBufPool.Get().(*[]byte)
 	b := appendLinePrefix((*bp)[:0], symbol, spectatordId)
 	b = strconv.AppendUint(b, val, 10)
-	// Use Write to preserve buffering behavior in wrapped writers.
-	w.Write(string(b))
+	w.WriteBytes(b)
 	*bp = b
 	byteBufPool.Put(bp)
 }
