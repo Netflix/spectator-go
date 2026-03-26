@@ -1,7 +1,6 @@
 package meter
 
 import (
-	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -31,6 +30,5 @@ func (g *MaxGauge) MeterId() *Id {
 
 // Set records the current value.
 func (g *MaxGauge) Set(value float64) {
-	var line = fmt.Sprintf("%s:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
-	g.writer.Write(line)
+	writeLineFloat(g.writer, g.meterTypeSymbol, g.id.spectatordId, value)
 }

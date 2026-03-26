@@ -85,12 +85,10 @@ func NewId(name string, tags map[string]string) *Id {
 		myTags[k] = v
 	}
 
-	spectatorId := toSpectatorId(name, tags)
-
 	return &Id{
 		name:         name,
 		tags:         myTags,
-		spectatordId: spectatorId,
+		spectatordId: toSpectatorId(name, tags),
 	}
 }
 
@@ -143,28 +141,33 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 }
 
 func toSpectatorId(name string, tags map[string]string) string {
-	var sb strings.Builder
-	writeSanitized(&sb, name)
+	bp := byteBufPool.Get().(*[]byte)
+	b := (*bp)[:0]
 
-	// Append sanitized keys and values.
+	b = appendSanitized(b, name)
+
 	for k, v := range tags {
-		sb.WriteString(",")
-		writeSanitized(&sb, k)
-		sb.WriteString("=")
-		writeSanitized(&sb, v)
+		b = append(b, ',')
+		b = appendSanitized(b, k)
+		b = append(b, '=')
+		b = appendSanitized(b, v)
 	}
 
-	return sb.String()
+	result := string(b)
+	*bp = b
+	byteBufPool.Put(bp)
+	return result
 }
 
-func writeSanitized(sb *strings.Builder, input string) {
+func appendSanitized(dst []byte, input string) []byte {
 	for _, r := range input {
 		if !isValidCharacter(r) {
-			sb.WriteRune('_')
+			dst = append(dst, '_')
 		} else {
-			sb.WriteRune(r)
+			dst = append(dst, byte(r))
 		}
 	}
+	return dst
 }
 
 func isValidCharacter(r rune) bool {

@@ -2,8 +2,9 @@ package meter
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"time"
+
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
 // Gauge represents a value that is sampled at a specific point in time. One
@@ -37,6 +38,5 @@ func (g *Gauge) MeterId() *Id {
 
 // Set records the current value.
 func (g *Gauge) Set(value float64) {
-	var line = fmt.Sprintf("%s:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
-	g.writer.Write(line)
+	writeLineFloat(g.writer, g.meterTypeSymbol, g.id.spectatordId, value)
 }

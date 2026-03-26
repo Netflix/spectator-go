@@ -1,9 +1,9 @@
 package meter
 
 import (
-	"fmt"
-	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"time"
+
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
 // PercentileTimer represents timing events, while capturing the histogram
@@ -28,7 +28,6 @@ func (t *PercentileTimer) MeterId() *Id {
 // Record records the value for a single event.
 func (t *PercentileTimer) Record(amount time.Duration) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%s:%s:%f", t.meterTypeSymbol, t.id.spectatordId, amount.Seconds())
-		t.writer.Write(line)
+		writeLineFloat(t.writer, t.meterTypeSymbol, t.id.spectatordId, amount.Seconds())
 	}
 }
