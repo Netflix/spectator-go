@@ -99,6 +99,9 @@ func newId(name string, tags map[string]string) *Id {
 // internal collection.
 func (id *Id) WithTag(key string, value string) *Id {
 	newTags := maps.Clone(id.tags)
+	if newTags == nil {
+		newTags = make(map[string]string, 1)
+	}
 	newTags[key] = value
 
 	return newId(id.name, newTags)
@@ -128,6 +131,9 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 	}
 
 	newTags := maps.Clone(id.tags)
+	if newTags == nil {
+		newTags = make(map[string]string, len(tags))
+	}
 	maps.Copy(newTags, tags)
 	return newId(id.name, newTags)
 }
