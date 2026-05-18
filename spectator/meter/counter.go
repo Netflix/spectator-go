@@ -1,7 +1,8 @@
 package meter
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -13,14 +14,14 @@ import (
 //
 // https://netflix.github.io/spectator/en/latest/intro/counter/
 type Counter struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewCounter generates a new counter, using the provided meter identifier.
 func NewCounter(id *Id, writer writer.Writer) *Counter {
-	return &Counter{id, writer, "c"}
+	return &Counter{id, writer, "c:" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -30,22 +31,19 @@ func (c *Counter) MeterId() *Id {
 
 // Increment increments the counter.
 func (c *Counter) Increment() {
-	var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, 1)
-	c.writer.Write(line)
+	c.writer.Write(c.linePrefix + "1")
 }
 
 // Add adds an int64 delta to the current measurement.
 func (c *Counter) Add(delta int64) {
 	if delta > 0 {
-		var line = fmt.Sprintf("%s:%s:%d", c.meterTypeSymbol, c.id.spectatordId, delta)
-		c.writer.Write(line)
+		c.writer.Write(c.linePrefix + strconv.FormatInt(delta, 10))
 	}
 }
 
 // AddFloat adds a float64 delta to the current measurement.
 func (c *Counter) AddFloat(delta float64) {
 	if delta > 0.0 {
-		var line = fmt.Sprintf("%s:%s:%f", c.meterTypeSymbol, c.id.spectatordId, delta)
-		c.writer.Write(line)
+		c.writer.Write(c.linePrefix + strconv.FormatFloat(delta, 'f', 6, 64))
 	}
 }

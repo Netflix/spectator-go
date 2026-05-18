@@ -2,6 +2,7 @@ package meter
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -80,16 +81,16 @@ func (id *Id) MapKey() string {
 // NewId generates a new *Id from the metric name, and the tags you want to
 // include on your metric.
 func NewId(name string, tags map[string]string) *Id {
-	myTags := make(map[string]string)
-	for k, v := range tags {
-		myTags[k] = v
-	}
+	return newId(name, maps.Clone(tags))
+}
 
+// newId creates a new *Id taking ownership of the provided tags map (no copy).
+func newId(name string, tags map[string]string) *Id {
 	spectatorId := toSpectatorId(name, tags)
 
 	return &Id{
 		name:         name,
-		tags:         myTags,
+		tags:         tags,
 		spectatordId: spectatorId,
 	}
 }
@@ -97,14 +98,13 @@ func NewId(name string, tags map[string]string) *Id {
 // WithTag creates a deep copy of the *Id, adding the requested tag to the
 // internal collection.
 func (id *Id) WithTag(key string, value string) *Id {
-	newTags := make(map[string]string)
-
-	for k, v := range id.tags {
-		newTags[k] = v
+	newTags := maps.Clone(id.tags)
+	if newTags == nil {
+		newTags = make(map[string]string, 1)
 	}
 	newTags[key] = value
 
-	return NewId(id.name, newTags)
+	return newId(id.name, newTags)
 }
 
 func (id *Id) String() string {
@@ -130,28 +130,31 @@ func (id *Id) WithTags(tags map[string]string) *Id {
 		return id
 	}
 
-	newTags := make(map[string]string)
-
-	for k, v := range id.tags {
-		newTags[k] = v
+	newTags := maps.Clone(id.tags)
+	if newTags == nil {
+		newTags = make(map[string]string, len(tags))
 	}
-
-	for k, v := range tags {
-		newTags[k] = v
-	}
-	return NewId(id.name, newTags)
+	maps.Copy(newTags, tags)
+	return newId(id.name, newTags)
 }
 
 func toSpectatorId(name string, tags map[string]string) string {
-	var sb strings.Builder
-	writeSanitized(&sb, name)
+	sb := builderPool.Get().(*strings.Builder)
+	sb.Reset()
+	defer builderPool.Put(sb)
+
+	// Pre-size: name + per-tag overhead (comma + key + equals + value).
+	estimatedSize := len(name) + len(tags)*40
+	sb.Grow(estimatedSize)
+
+	writeSanitized(sb, name)
 
 	// Append sanitized keys and values.
 	for k, v := range tags {
 		sb.WriteString(",")
-		writeSanitized(&sb, k)
+		writeSanitized(sb, k)
 		sb.WriteString("=")
-		writeSanitized(&sb, v)
+		writeSanitized(sb, v)
 	}
 
 	return sb.String()

@@ -1,7 +1,8 @@
 package meter
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -13,14 +14,14 @@ import (
 //
 // To set `now()` as the last success, set a value of 0.
 type AgeGauge struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewAgeGauge generates a new gauge, using the provided meter identifier.
 func NewAgeGauge(id *Id, writer writer.Writer) *AgeGauge {
-	return &AgeGauge{id, writer, "A"}
+	return &AgeGauge{id, writer, "A:" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -31,13 +32,11 @@ func (g *AgeGauge) MeterId() *Id {
 // Set records the current time in seconds since the epoch.
 func (g *AgeGauge) Set(seconds int64) {
 	if seconds >= 0 {
-		var line = fmt.Sprintf("%s:%s:%d", g.meterTypeSymbol, g.id.spectatordId, seconds)
-		g.writer.Write(line)
+		g.writer.Write(g.linePrefix + strconv.FormatInt(seconds, 10))
 	}
 }
 
 // Now records the current time in epoch seconds, using a spectatord feature.
 func (g *AgeGauge) Now() {
-	var line = fmt.Sprintf("%s:%s:0", g.meterTypeSymbol, g.id.spectatordId)
-	g.writer.Write(line)
+	g.writer.Write(g.linePrefix + "0")
 }

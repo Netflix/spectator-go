@@ -2,6 +2,8 @@ package meter
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"time"
 )
@@ -15,19 +17,19 @@ import (
 //
 // https://netflix.github.io/spectator/en/latest/intro/gauge/
 type Gauge struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewGauge generates a new gauge, using the provided meter identifier.
 func NewGauge(id *Id, writer writer.Writer) *Gauge {
-	return &Gauge{id, writer, "g"}
+	return &Gauge{id, writer, "g:" + id.spectatordId + ":"}
 }
 
 // NewGaugeWithTTL generates a new gauge, using the provided meter identifier and ttl.
 func NewGaugeWithTTL(id *Id, writer writer.Writer, ttl time.Duration) *Gauge {
-	return &Gauge{id, writer, fmt.Sprintf("g,%d", int(ttl.Seconds()))}
+	return &Gauge{id, writer, fmt.Sprintf("g,%d", int(ttl.Seconds())) + ":" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -37,6 +39,11 @@ func (g *Gauge) MeterId() *Id {
 
 // Set records the current value.
 func (g *Gauge) Set(value float64) {
-	var line = fmt.Sprintf("%s:%s:%f", g.meterTypeSymbol, g.id.spectatordId, value)
-	g.writer.Write(line)
+	g.writer.Write(g.linePrefix + strconv.FormatFloat(value, 'f', 6, 64))
+}
+
+// SetInt records the current value as an integer, avoiding the overhead of
+// float64 conversion and formatting.
+func (g *Gauge) SetInt(value int64) {
+	g.writer.Write(g.linePrefix + strconv.FormatInt(value, 10))
 }

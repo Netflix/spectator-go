@@ -1,7 +1,8 @@
 package meter
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"time"
 )
@@ -9,14 +10,14 @@ import (
 // Timer is used to measure how long (in seconds) some event is taking. This
 // type is safe for concurrent use.
 type Timer struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewTimer generates a new timer, using the provided meter identifier.
 func NewTimer(id *Id, writer writer.Writer) *Timer {
-	return &Timer{id, writer, "t"}
+	return &Timer{id, writer, "t:" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -27,7 +28,6 @@ func (t *Timer) MeterId() *Id {
 // Record records the duration this specific event took.
 func (t *Timer) Record(amount time.Duration) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%s:%s:%f", t.meterTypeSymbol, t.id.spectatordId, amount.Seconds())
-		t.writer.Write(line)
+		t.writer.Write(t.linePrefix + strconv.FormatFloat(amount.Seconds(), 'f', 6, 64))
 	}
 }

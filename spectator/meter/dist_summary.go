@@ -1,7 +1,8 @@
 package meter
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -13,15 +14,15 @@ import (
 //
 // https://netflix.github.io/spectator/en/latest/intro/dist-summary/
 type DistributionSummary struct {
-	id              *Id
-	writer          writer.Writer
-	meterTypeSymbol string
+	id         *Id
+	writer     writer.Writer
+	linePrefix string
 }
 
 // NewDistributionSummary generates a new distribution summary, using the
 // provided meter identifier.
 func NewDistributionSummary(id *Id, writer writer.Writer) *DistributionSummary {
-	return &DistributionSummary{id, writer, "d"}
+	return &DistributionSummary{id, writer, "d:" + id.spectatordId + ":"}
 }
 
 // MeterId returns the meter identifier.
@@ -32,7 +33,6 @@ func (d *DistributionSummary) MeterId() *Id {
 // Record records a value to track within the distribution.
 func (d *DistributionSummary) Record(amount int64) {
 	if amount >= 0 {
-		var line = fmt.Sprintf("%s:%s:%d", d.meterTypeSymbol, d.id.spectatordId, amount)
-		d.writer.Write(line)
+		d.writer.Write(d.linePrefix + strconv.FormatInt(amount, 10))
 	}
 }
