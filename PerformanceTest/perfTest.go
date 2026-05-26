@@ -11,10 +11,7 @@ import (
 	spectator "github.com/Netflix/spectator-go/v2/spectator"
 )
 
-const (
-	numThreads      = 4
-	maxDurationSecs = 2 * 60
-)
+const maxDurationSecs = 2 * 60
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: perfTest [writer_type] [buffering]")
@@ -56,6 +53,11 @@ func Run(args []string) int {
 		counterName = "unix_test_counter"
 		locationTag = "unix"
 		writerTypeName = "UDS"
+	}
+
+	numThreads := 1
+	if bufferingEnabled {
+		numThreads = 4
 	}
 
 	fmt.Println("Running performance test with the following configuration:")
@@ -126,6 +128,6 @@ func Run(args []string) int {
 	fmt.Printf("Iterations completed: %d\n", total)
 	fmt.Printf("Total elapsed time: %.2f seconds\n", elapsed)
 	fmt.Printf("Rate: %.2f iterations/second\n", rate)
-	fmt.Printf("Rate per thread: %.2f iterations/second/thread\n", rate/numThreads)
+	fmt.Printf("Rate per thread: %.2f iterations/second/thread\n", rate/float64(numThreads))
 	return 0
 }
