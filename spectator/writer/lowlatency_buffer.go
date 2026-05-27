@@ -3,6 +3,7 @@ package writer
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,8 +21,10 @@ const chunkSize = 60 * 1024
 const separator = "\n"
 
 // bufferShard is the atomic unit of buffering, used to store one or more chunks of spectatord
-// protocol lines. Each shard is accessed in round-robin format within either the front buffer
-// or the back buffer, and the number of shards is scaled to the number of CPUs on the system.
+// protocol lines. Order-sensitive meter types are selected deterministically by meter id, so
+// that sequential updates for the same meter land in the same shard and are flushed in the
+// order they were written. Other lines are distributed round-robin across shards. The number
+// of shards is scaled to the number of CPUs on the system.
 // The purpose of this design is to spread buffer access across a reasonable number of mutexes,
 // in order to reduce overall latency when writing to the buffer. The impact of the shard design
 // is less than the impact of the front and back buffer design, but it is still important for
@@ -81,13 +84,18 @@ type LowLatencyBuffer struct {
 	// so that one can be drained for writes to the spectatord socket, while the other can be filled
 	// with writes from the application without contending for the same mutexes. They are swapped back
 	// and forth during periodic flushes, according to the flushInterval.
-	frontBuffers    []*bufferShard
-	backBuffers     []*bufferShard
-	bufferSetSize   int
-	useFrontBuffers atomic.Bool
-	flushInterval   time.Duration
+	frontBuffers  []*bufferShard
+	backBuffers   []*bufferShard
+	bufferSetSize int
+	flushInterval time.Duration
 
-	// Distribute writes across the shards in the active buffer, with a round-robin scheme.
+	// activeBufferState is incremented on every buffer swap. Even values mean the front buffers
+	// are active for application writes, odd values mean the back buffers are active. Writers
+	// verify the state after locking a shard so delayed writes cannot append to a buffer set
+	// that has already been swapped out and flushed.
+	activeBufferState atomic.Uint64
+
+	// Counter used to round-robin shards for commutative meter types and malformed lines.
 	counter uint64
 
 	stopCh chan struct{}
@@ -134,8 +142,6 @@ func NewLowLatencyBuffer(writer Writer, logger logger.Logger, bufferSize int, fl
 		stopCh:        make(chan struct{}),
 	}
 
-	llb.useFrontBuffers.Store(true)
-
 	// Start the flush goroutine
 	llb.wg.Add(1)
 	go llb.flushLoop()
@@ -144,27 +150,45 @@ func NewLowLatencyBuffer(writer Writer, logger logger.Logger, bufferSize int, fl
 }
 
 func (llb *LowLatencyBuffer) Write(line string) {
-	// Pick a shard index across all shards in the active buffer, with a round-robin distribution
-	shardIndex := int(atomic.AddUint64(&llb.counter, 1)) % len(llb.frontBuffers)
+	// Pick a shard deterministically by meter id only for order-sensitive meter types.
+	// Other lines use round-robin distribution to preserve write throughput for hot meters.
+	shardIndex := llb.shardIndexFor(line)
+	lineBytes := []byte(line)
 
-	// Acquire read lock, to check which buffers are active
-	var buffer *bufferShard
-	if llb.useFrontBuffers.Load() {
-		buffer = llb.frontBuffers[shardIndex]
-	} else {
-		buffer = llb.backBuffers[shardIndex]
+	for {
+		state := llb.activeBufferState.Load()
+		buffer := llb.bufferShardForState(state, shardIndex)
+		if llb.writeToActiveShard(buffer, state, lineBytes) {
+			return
+		}
 	}
+}
 
+func (llb *LowLatencyBuffer) bufferShardForState(state uint64, shardIndex int) *bufferShard {
+	if frontBuffersActive(state) {
+		return llb.frontBuffers[shardIndex]
+	}
+	return llb.backBuffers[shardIndex]
+}
+
+func frontBuffersActive(state uint64) bool {
+	return state%2 == 0
+}
+
+func (llb *LowLatencyBuffer) writeToActiveShard(buffer *bufferShard, state uint64, lineBytes []byte) bool {
 	// Add the line to the appropriate chunk in the buffer shard, or drop, if it overflows
 	buffer.mu.Lock()
 	defer buffer.mu.Unlock()
-	lineBytes := []byte(line)
+
+	if llb.activeBufferState.Load() != state {
+		return false
+	}
 
 	// Check if current chunk can fit the new data
 	idx := buffer.getChunkIndexForLine(lineBytes)
 	if idx == -1 {
 		// overflows (drops) are counted in getChunkIndexForLine, for metric reporting
-		return
+		return true
 	}
 
 	// We can write to the selected chunk
@@ -173,6 +197,64 @@ func (llb *LowLatencyBuffer) Write(line string) {
 		buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], []byte(separator)...)
 	}
 	buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], lineBytes...)
+	return true
+}
+
+// shardIndexFor returns the shard a protocol line should be written to. Lines for the same
+// order-sensitive meter id always hash to the same shard, so sequential writes preserve order
+// through flush. Other lines use the global counter for round-robin distribution.
+func (llb *LowLatencyBuffer) shardIndexFor(line string) int {
+	numShards := uint32(len(llb.frontBuffers))
+	if key, ok := orderSensitiveMeterIdKey(line); ok {
+		return int(fnv1aHash(key) % numShards)
+	}
+	return int(atomic.AddUint64(&llb.counter, 1) % uint64(numShards))
+}
+
+// orderSensitiveMeterIdKey returns the meter id portion of a spectatord protocol line for
+// meter types where arrival order affects interpretation by spectatord. The protocol line
+// format is "<type>:<id>:<value>" or "<type>,<extra>:<id>:<value>" (e.g. "g,120:..." for
+// gauges with a TTL). The id is the substring between the first and last ':' in the line.
+// Returns ok=false for commutative meter types and malformed lines.
+func orderSensitiveMeterIdKey(line string) (string, bool) {
+	first := strings.IndexByte(line, ':')
+	if first <= 0 {
+		return "", false
+	}
+	if !isOrderSensitiveMeterType(line[:first]) {
+		return "", false
+	}
+	last := strings.LastIndexByte(line, ':')
+	if last <= first {
+		return "", false
+	}
+	return line[first+1 : last], true
+}
+
+// isOrderSensitiveMeterType identifies protocol types that carry absolute samples rather than
+// commutative observations. Reordering these samples can change what spectatord reports.
+func isOrderSensitiveMeterType(symbol string) bool {
+	switch symbol {
+	case "A", "C", "U", "g":
+		return true
+	default:
+		return strings.HasPrefix(symbol, "g,")
+	}
+}
+
+// fnv1aHash is an inline FNV-1a 32-bit hash over a string, written to avoid the allocation
+// that hash/fnv incurs by exposing an io.Writer-style interface.
+func fnv1aHash(s string) uint32 {
+	const (
+		offset32 uint32 = 2166136261
+		prime32  uint32 = 16777619
+	)
+	h := offset32
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= prime32
+	}
+	return h
 }
 
 // flushLoop runs in a separate goroutine and handles buffer swapping and flushing
@@ -199,12 +281,11 @@ func (llb *LowLatencyBuffer) swapAndFlush() {
 	start := time.Now()
 
 	// Swap the buffer sets, so one can be drained, while the other accepts application writes
-	old := llb.useFrontBuffers.Load()
-	llb.useFrontBuffers.CompareAndSwap(old, !old)
+	state := llb.activeBufferState.Add(1)
 
 	var bufferSet string
 	var buffersToFlush []*bufferShard
-	if llb.useFrontBuffers.Load() {
+	if frontBuffersActive(state) {
 		// Front buffers are now in use for application writes, so flush the back buffers
 		bufferSet = "back"
 		buffersToFlush = llb.backBuffers
