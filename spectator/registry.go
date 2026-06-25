@@ -27,6 +27,8 @@ type Registry interface {
 	AgeGaugeWithId(id *meter.Id) *meter.AgeGauge
 	Counter(name string, tags map[string]string) *meter.Counter
 	CounterWithId(id *meter.Id) *meter.Counter
+	DistinctCountSketch(name string, tags map[string]string) *meter.DistinctCountSketch
+	DistinctCountSketchWithId(id *meter.Id) *meter.DistinctCountSketch
 	DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary
 	DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary
 	Gauge(name string, tags map[string]string) *meter.Gauge
@@ -115,6 +117,14 @@ func (r *spectatordRegistry) Counter(name string, tags map[string]string) *meter
 
 func (r *spectatordRegistry) CounterWithId(id *meter.Id) *meter.Counter {
 	return meter.NewCounter(id, r.writer)
+}
+
+func (r *spectatordRegistry) DistinctCountSketch(name string, tags map[string]string) *meter.DistinctCountSketch {
+	return meter.NewDistinctCountSketch(r.NewId(name, tags), r.writer)
+}
+
+func (r *spectatordRegistry) DistinctCountSketchWithId(id *meter.Id) *meter.DistinctCountSketch {
+	return meter.NewDistinctCountSketch(id, r.writer)
 }
 
 func (r *spectatordRegistry) DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary {

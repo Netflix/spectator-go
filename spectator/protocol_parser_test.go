@@ -63,3 +63,25 @@ func TestParseGaugeWithTTL(t *testing.T) {
 		t.Errorf("Expected '1', got '%s'", value)
 	}
 }
+
+func TestParseProtocolLineDistinctCountSketch(t *testing.T) {
+	// The 's' (precomputed-hash) line carries a decimal uint64; it has no ':' so it splits cleanly.
+	line := "s:sketch:15154266338359012955"
+	meterType, meterId, value, err := ParseProtocolLine(line)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if meterType != "s" {
+		t.Errorf("Expected 's', got '%s'", meterType)
+	}
+
+	if meterId.Name() != "sketch" {
+		t.Errorf("Unexpected meterId: %v", meterId)
+	}
+
+	if value != "15154266338359012955" {
+		t.Errorf("Expected '15154266338359012955', got '%s'", value)
+	}
+}

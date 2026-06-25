@@ -72,6 +72,33 @@ func TestRegistryWithMemoryWriter_CounterWithId(t *testing.T) {
 	}
 }
 
+func TestRegistryWithMemoryWriter_DistinctCountSketch(t *testing.T) {
+	r := NewTestRegistry()
+	mw := r.GetWriter().(*writer.MemoryWriter)
+
+	sketch := r.DistinctCountSketch("test_distinctcountsketch", nil)
+	sketch.RecordString("a")
+
+	// "a" hashes to 15154266338359012955 (see the meter test vectors).
+	expected := "s:test_distinctcountsketch:15154266338359012955"
+	if len(mw.Lines()) != 1 || mw.Lines()[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines()[0])
+	}
+}
+
+func TestRegistryWithMemoryWriter_DistinctCountSketchWithId(t *testing.T) {
+	r := NewTestRegistryWithCommonTags()
+	mw := r.GetWriter().(*writer.MemoryWriter)
+
+	sketch := r.DistinctCountSketchWithId(r.NewId("test_distinctcountsketch", nil))
+	sketch.RecordString("a")
+
+	expected := "s:test_distinctcountsketch,extra-tag=foo:15154266338359012955"
+	if len(mw.Lines()) != 1 || mw.Lines()[0] != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines()[0])
+	}
+}
+
 func TestRegistryWithMemoryWriter_DistributionSummary(t *testing.T) {
 	r := NewTestRegistry()
 	mw := r.GetWriter().(*writer.MemoryWriter)
