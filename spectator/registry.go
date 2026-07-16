@@ -102,7 +102,7 @@ func (r *spectatordRegistry) NewId(name string, tags map[string]string) *meter.I
 }
 
 func (r *spectatordRegistry) AgeGauge(name string, tags map[string]string) *meter.AgeGauge {
-	return meter.NewAgeGauge(r.NewId(name, tags), r.writer)
+	return meter.NewAgeGaugeDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) AgeGaugeWithId(id *meter.Id) *meter.AgeGauge {
@@ -110,7 +110,7 @@ func (r *spectatordRegistry) AgeGaugeWithId(id *meter.Id) *meter.AgeGauge {
 }
 
 func (r *spectatordRegistry) Counter(name string, tags map[string]string) *meter.Counter {
-	return meter.NewCounter(r.NewId(name, tags), r.writer)
+	return meter.NewCounterDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) CounterWithId(id *meter.Id) *meter.Counter {
@@ -118,7 +118,7 @@ func (r *spectatordRegistry) CounterWithId(id *meter.Id) *meter.Counter {
 }
 
 func (r *spectatordRegistry) DistributionSummary(name string, tags map[string]string) *meter.DistributionSummary {
-	return meter.NewDistributionSummary(r.NewId(name, tags), r.writer)
+	return meter.NewDistributionSummaryDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) DistributionSummaryWithId(id *meter.Id) *meter.DistributionSummary {
@@ -126,7 +126,7 @@ func (r *spectatordRegistry) DistributionSummaryWithId(id *meter.Id) *meter.Dist
 }
 
 func (r *spectatordRegistry) Gauge(name string, tags map[string]string) *meter.Gauge {
-	return meter.NewGauge(r.NewId(name, tags), r.writer)
+	return meter.NewGaugeDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) GaugeWithId(id *meter.Id) *meter.Gauge {
@@ -134,7 +134,7 @@ func (r *spectatordRegistry) GaugeWithId(id *meter.Id) *meter.Gauge {
 }
 
 func (r *spectatordRegistry) GaugeWithTTL(name string, tags map[string]string, duration time.Duration) *meter.Gauge {
-	return meter.NewGaugeWithTTL(r.NewId(name, tags), r.writer, duration)
+	return meter.NewGaugeDirectWithTTL(name, tags, r.config.extraCommonTags, r.writer, duration)
 }
 
 func (r *spectatordRegistry) GaugeWithIdWithTTL(id *meter.Id, duration time.Duration) *meter.Gauge {
@@ -142,7 +142,7 @@ func (r *spectatordRegistry) GaugeWithIdWithTTL(id *meter.Id, duration time.Dura
 }
 
 func (r *spectatordRegistry) MaxGauge(name string, tags map[string]string) *meter.MaxGauge {
-	return meter.NewMaxGauge(r.NewId(name, tags), r.writer)
+	return meter.NewMaxGaugeDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) MaxGaugeWithId(id *meter.Id) *meter.MaxGauge {
@@ -150,7 +150,7 @@ func (r *spectatordRegistry) MaxGaugeWithId(id *meter.Id) *meter.MaxGauge {
 }
 
 func (r *spectatordRegistry) MonotonicCounter(name string, tags map[string]string) *meter.MonotonicCounter {
-	return meter.NewMonotonicCounter(r.NewId(name, tags), r.writer)
+	return meter.NewMonotonicCounterDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) MonotonicCounterWithId(id *meter.Id) *meter.MonotonicCounter {
@@ -158,7 +158,7 @@ func (r *spectatordRegistry) MonotonicCounterWithId(id *meter.Id) *meter.Monoton
 }
 
 func (r *spectatordRegistry) MonotonicCounterUint(name string, tags map[string]string) *meter.MonotonicCounterUint {
-	return meter.NewMonotonicCounterUint(r.NewId(name, tags), r.writer)
+	return meter.NewMonotonicCounterUintDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) MonotonicCounterUintWithId(id *meter.Id) *meter.MonotonicCounterUint {
@@ -166,7 +166,7 @@ func (r *spectatordRegistry) MonotonicCounterUintWithId(id *meter.Id) *meter.Mon
 }
 
 func (r *spectatordRegistry) PercentileDistributionSummary(name string, tags map[string]string) *meter.PercentileDistributionSummary {
-	return meter.NewPercentileDistributionSummary(r.NewId(name, tags), r.writer)
+	return meter.NewPercentileDistributionSummaryDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) PercentileDistributionSummaryWithId(id *meter.Id) *meter.PercentileDistributionSummary {
@@ -174,7 +174,7 @@ func (r *spectatordRegistry) PercentileDistributionSummaryWithId(id *meter.Id) *
 }
 
 func (r *spectatordRegistry) PercentileTimer(name string, tags map[string]string) *meter.PercentileTimer {
-	return meter.NewPercentileTimer(r.NewId(name, tags), r.writer)
+	return meter.NewPercentileTimerDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) PercentileTimerWithId(id *meter.Id) *meter.PercentileTimer {
@@ -182,7 +182,7 @@ func (r *spectatordRegistry) PercentileTimerWithId(id *meter.Id) *meter.Percenti
 }
 
 func (r *spectatordRegistry) Timer(name string, tags map[string]string) *meter.Timer {
-	return meter.NewTimer(r.NewId(name, tags), r.writer)
+	return meter.NewTimerDirect(name, tags, r.config.extraCommonTags, r.writer)
 }
 
 func (r *spectatordRegistry) TimerWithId(id *meter.Id) *meter.Timer {

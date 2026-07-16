@@ -43,12 +43,74 @@ func (lb *LineBuffer) Write(line string) {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
+	lb.beginLineLocked()
+	lb.buffer.WriteString(line)
+	lb.endLineLocked()
+}
+
+func (lb *LineBuffer) WriteLine(prefix, value string) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	lb.beginLineLocked()
+	lb.buffer.WriteString(prefix)
+	lb.buffer.WriteString(value)
+	lb.endLineLocked()
+}
+
+// WriteInt appends prefix + the base-10 value, formatting the value into a stack
+// buffer to avoid a value-string allocation. Formatting is done before taking
+// the lock so the mutex only covers the buffer appends.
+func (lb *LineBuffer) WriteInt(prefix string, value int64) {
+	var tmp [intFmtBufLen]byte
+	v := strconv.AppendInt(tmp[:0], value, 10)
+
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.beginLineLocked()
+	lb.buffer.WriteString(prefix)
+	lb.buffer.Write(v)
+	lb.endLineLocked()
+}
+
+// WriteUint appends prefix + the base-10 value.
+func (lb *LineBuffer) WriteUint(prefix string, value uint64) {
+	var tmp [intFmtBufLen]byte
+	v := strconv.AppendUint(tmp[:0], value, 10)
+
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.beginLineLocked()
+	lb.buffer.WriteString(prefix)
+	lb.buffer.Write(v)
+	lb.endLineLocked()
+}
+
+// WriteFloat appends prefix + the value formatted as 'f' with 6 decimals.
+func (lb *LineBuffer) WriteFloat(prefix string, value float64) {
+	var tmp [floatFmtBufLen]byte
+	v := strconv.AppendFloat(tmp[:0], value, 'f', 6, 64)
+
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.beginLineLocked()
+	lb.buffer.WriteString(prefix)
+	lb.buffer.Write(v)
+	lb.endLineLocked()
+}
+
+// beginLineLocked writes the line separator if the buffer already holds data.
+// Callers must hold lb.mu.
+func (lb *LineBuffer) beginLineLocked() {
 	if lb.buffer.Len() > 0 {
 		// buffer has data, so add the separator to indicate the end of the previous line
 		lb.buffer.WriteString(separator)
 	}
+}
 
-	lb.buffer.WriteString(line)
+// endLineLocked accounts for the written line and flushes on overflow.
+// Callers must hold lb.mu.
+func (lb *LineBuffer) endLineLocked() {
 	lb.lineCount++
 
 	if lb.buffer.Len() >= lb.bufferSize {

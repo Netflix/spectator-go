@@ -7,7 +7,44 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
+
+func TestNewCounterDirect_MeterIdMatchesWithId(t *testing.T) {
+	w := &writer.NoopWriter{}
+	tags := map[string]string{"app": "foo", "region": "us-east-1", "env": "prod"}
+
+	viaId := NewCounter(NewId("my.counter", tags), w)
+	direct := NewCounterDirect("my.counter", tags, nil, w)
+
+	// Canonical identity must match. MapKey sorts tags, so it is order-independent
+	// (spectatordId tag order follows map iteration order and is not stable).
+	got := direct.MeterId()
+	if got.MapKey() != viaId.MeterId().MapKey() {
+		t.Errorf("MapKey mismatch: %q vs %q", got.MapKey(), viaId.MeterId().MapKey())
+	}
+
+	// MeterId() reconstructed from the prefix must recover the name and (for
+	// clean input) the original tags.
+	if got.Name() != "my.counter" {
+		t.Errorf("name mismatch: got %q", got.Name())
+	}
+	if !reflect.DeepEqual(got.Tags(), tags) {
+		t.Errorf("tags mismatch: got %v want %v", got.Tags(), tags)
+	}
+}
+
+func TestNewCounterDirect_MeterIdNoTags(t *testing.T) {
+	direct := NewCounterDirect("my.counter", nil, nil, &writer.NoopWriter{})
+	got := direct.MeterId()
+	if got.Name() != "my.counter" {
+		t.Errorf("name mismatch: got %q", got.Name())
+	}
+	if len(got.Tags()) != 0 {
+		t.Errorf("expected no tags, got %v", got.Tags())
+	}
+}
 
 func TestId_mapKey(t *testing.T) {
 	id := NewId("foo", nil)
@@ -142,6 +179,17 @@ func TestToSpectatorId_InvalidTags(t *testing.T) {
 
 	if result != expected1 && result != expected2 {
 		t.Errorf("Expected '%s' or '%s', got '%s'", expected1, expected2, result)
+	}
+}
+
+// TestToSpectatorId_MultiByte verifies that multi-byte (non-ASCII) runes each
+// collapse to a single '_', which exercises the writeSanitized slow path and
+// confirms the byte-scan fast path correctly routes non-ASCII input to it.
+func TestToSpectatorId_MultiByte(t *testing.T) {
+	// "café" -> c,a,f valid; 'é' (2 bytes) invalid -> one '_'. "€5" -> '€' (3 bytes) -> '_', '5' valid.
+	result := toSpectatorId("café", map[string]string{"k": "€5"})
+	if expected := "caf_,k=_5"; result != expected {
+		t.Errorf("Expected %q, got %q", expected, result)
 	}
 }
 

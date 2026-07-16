@@ -1,2 +1,6 @@
 .idea/
 CLAUDE.md
+
+# Go test binaries and profiles
+*.test
+*.prof

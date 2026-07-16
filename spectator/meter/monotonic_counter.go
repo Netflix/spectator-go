@@ -1,8 +1,6 @@
 package meter
 
 import (
-	"strconv"
-
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -29,12 +27,20 @@ func NewMonotonicCounter(id *Id, writer writer.Writer) *MonotonicCounter {
 	return &MonotonicCounter{id, writer, "C:" + id.spectatordId + ":"}
 }
 
-// MeterId returns the meter identifier.
+// NewMonotonicCounterDirect generates a new monotonic counter directly from a
+// name and tags, without allocating an *Id or copying the tags map. commonTags
+// carries the registry's extraCommonTags.
+func NewMonotonicCounterDirect(name string, tags, commonTags map[string]string, writer writer.Writer) *MonotonicCounter {
+	return &MonotonicCounter{nil, writer, buildLinePrefix("C", name, tags, commonTags)}
+}
+
+// MeterId returns the meter identifier, reconstructing it from the line prefix
+// if the counter was created directly from a name and tags.
 func (c *MonotonicCounter) MeterId() *Id {
-	return c.id
+	return resolveMeterId(c.id, c.linePrefix)
 }
 
 // Set sets a value as the current measurement; spectatord calculates the delta.
 func (c *MonotonicCounter) Set(value float64) {
-	c.writer.Write(c.linePrefix + strconv.FormatFloat(value, 'f', 6, 64))
+	c.writer.WriteFloat(c.linePrefix, value)
 }

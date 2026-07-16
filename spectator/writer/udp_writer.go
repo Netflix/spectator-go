@@ -66,6 +66,57 @@ func (u *UdpWriter) Write(line string) {
 	u.WriteString(line)
 }
 
+func (u *UdpWriter) WriteLine(prefix, value string) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteLine(prefix, value)
+		return
+	}
+
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteLine(prefix, value)
+		return
+	}
+
+	// Direct writes need a single contiguous datagram, so concatenate here.
+	u.WriteString(prefix + value)
+}
+
+func (u *UdpWriter) WriteInt(prefix string, value int64) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteInt(prefix, value)
+		return
+	}
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteInt(prefix, value)
+		return
+	}
+	u.WriteString(formatLineInt(prefix, value))
+}
+
+func (u *UdpWriter) WriteUint(prefix string, value uint64) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteUint(prefix, value)
+		return
+	}
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteUint(prefix, value)
+		return
+	}
+	u.WriteString(formatLineUint(prefix, value))
+}
+
+func (u *UdpWriter) WriteFloat(prefix string, value float64) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteFloat(prefix, value)
+		return
+	}
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteFloat(prefix, value)
+		return
+	}
+	u.WriteString(formatLineFloat(prefix, value))
+}
+
 func (u *UdpWriter) WriteBytes(line []byte) {
 	_, err := u.conn.Write(line)
 	if err != nil {
