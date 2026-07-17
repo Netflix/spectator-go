@@ -3,14 +3,57 @@ package writer
 import (
 	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// intFmtBufLen is enough for any base-10 int64/uint64: min int64
+// "-9223372036854775808" and max uint64 "18446744073709551615" are both 20 bytes.
+const intFmtBufLen = 20
+
+// floatFmtBufLen is the largest output strconv.AppendFloat can produce for a
+// float64 in 'f' format with 6 decimals: sign + up to 309 integer digits
+// (math.MaxFloat64 ≈ 1.8e308) + '.' + 6 fractional digits. Sizing the scratch
+// buffer to this keeps WriteFloat allocation-free for the full float64 range.
+const floatFmtBufLen = 1 + 309 + 1 + 6
+
+// formatLineInt, formatLineUint, and formatLineFloat build a full protocol line
+// from a prefix and numeric value. They are the concatenating fallback used by
+// non-buffered writers, which need a single contiguous line anyway; buffered
+// writers override the typed methods to append without allocating.
+func formatLineInt(prefix string, value int64) string {
+	return prefix + strconv.FormatInt(value, 10)
+}
+
+func formatLineUint(prefix string, value uint64) string {
+	return prefix + strconv.FormatUint(value, 10)
+}
+
+func formatLineFloat(prefix string, value float64) string {
+	return prefix + strconv.FormatFloat(value, 'f', 6, 64)
+}
 
 // Writer that accepts SpectatorD line protocol.
 type Writer interface {
 	// Write is the primary interface, for meters
 	Write(line string)
+	// WriteLine writes a protocol line composed of a precomputed prefix
+	// (e.g. "c:name,tag=val:") followed by a value (e.g. "1"), without the
+	// caller building an intermediate concatenated string. Buffered writers
+	// append the two pieces directly into their backing storage, avoiding a
+	// per-emit allocation on the metric hot path. Non-buffered writers may
+	// concatenate, which is no more expensive than the previous Write path.
+	WriteLine(prefix, value string)
+	// WriteInt, WriteUint, and WriteFloat write prefix followed by a numeric
+	// value formatted with strconv. Buffered writers format directly into their
+	// backing storage (strconv.Append*), avoiding the string allocation that a
+	// caller-side strconv.Format* + WriteLine would incur. Floats use the same
+	// format as the line protocol: 'f', 6 decimal places, 64-bit. Non-buffered
+	// writers may format-and-concatenate as a fallback.
+	WriteInt(prefix string, value int64)
+	WriteUint(prefix string, value uint64)
+	WriteFloat(prefix string, value float64)
 	// WriteBytes and WriteString are secondary interfaces, for buffers
 	WriteBytes(line []byte)
 	WriteString(line string)

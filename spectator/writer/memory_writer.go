@@ -15,6 +15,22 @@ func (m *MemoryWriter) Write(line string) {
 	m.WriteString(line)
 }
 
+func (m *MemoryWriter) WriteLine(prefix, value string) {
+	m.WriteString(prefix + value)
+}
+
+func (m *MemoryWriter) WriteInt(prefix string, value int64) {
+	m.WriteString(formatLineInt(prefix, value))
+}
+
+func (m *MemoryWriter) WriteUint(prefix string, value uint64) {
+	m.WriteString(formatLineUint(prefix, value))
+}
+
+func (m *MemoryWriter) WriteFloat(prefix string, value float64) {
+	m.WriteString(formatLineFloat(prefix, value))
+}
+
 func (m *MemoryWriter) WriteBytes(line []byte) {
 	m.WriteString(string(line))
 }

@@ -3,6 +3,7 @@ package writer
 import (
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,22 +39,25 @@ type bufferShard struct {
 }
 
 // getChunkIndexForLine returns the chunkIndex that should be used for storing the line, or -1, if there is
-// an overflow and the line cannot be stored in the bufferShard.
-func (b *bufferShard) getChunkIndexForLine(line []byte) int {
-	totalWriteLength := len(line)
+// an overflow and the line cannot be stored in the bufferShard. It reports
+// whether space was reserved (true) or the data must be dropped (false); on
+// success b.chunkIndex identifies the chunk to append into (advancing it if the
+// line does not fit in the current chunk).
+func (b *bufferShard) reserveChunkForLine(lineLen int) bool {
+	totalWriteLength := lineLen
 
 	// All chunks are full for the shard, drop the data
 	if b.chunkIndex >= len(b.data) {
 		b.overflows++
 		b.overflowBytes += int64(totalWriteLength)
-		return -1
+		return false
 	}
 
 	// This should not happen, drop the data. The maximum length of a well-formed protocol line is 3.8KB.
-	if len(line) > chunkSize {
+	if lineLen > chunkSize {
 		b.overflows++
 		b.overflowBytes += int64(totalWriteLength)
-		return -1
+		return false
 	}
 
 	if len(b.data[b.chunkIndex]) > 0 {
@@ -70,10 +74,10 @@ func (b *bufferShard) getChunkIndexForLine(line []byte) int {
 	if b.chunkIndex == len(b.data) {
 		b.overflows++
 		b.overflowBytes += int64(totalWriteLength)
-		return -1
+		return false
 	}
 
-	return b.chunkIndex
+	return true
 }
 
 type LowLatencyBuffer struct {
@@ -150,18 +154,110 @@ func NewLowLatencyBuffer(writer Writer, logger logger.Logger, bufferSize int, fl
 }
 
 func (llb *LowLatencyBuffer) Write(line string) {
-	// Pick a shard deterministically by meter id only for order-sensitive meter types.
-	// Other lines use round-robin distribution to preserve write throughput for hot meters.
-	shardIndex := llb.shardIndexFor(line)
-	lineBytes := []byte(line)
+	// A whole line shards on itself (the meter id lies between its first and last
+	// ':'); appending it with an empty value reuses the shared string append path.
+	llb.writeSegments(line, "")
+}
 
+// WriteLine appends prefix + value as one protocol line without concatenating
+// them first. Sharding uses the prefix alone: the meter id (which determines
+// the shard for order-sensitive types) lies between the first and last ':' of
+// the line, both of which are contained in the prefix, so the value never
+// affects shard selection.
+func (llb *LowLatencyBuffer) WriteLine(prefix, value string) {
+	llb.writeSegments(prefix, value)
+}
+
+// WriteInt appends prefix + the base-10 value with no allocation: the value is
+// formatted into a stack buffer and copied straight into the shard chunk.
+func (llb *LowLatencyBuffer) WriteInt(prefix string, value int64) {
+	var tmp [intFmtBufLen]byte
+	llb.writeValueSegments(prefix, strconv.AppendInt(tmp[:0], value, 10))
+}
+
+// WriteUint appends prefix + the base-10 value with no allocation.
+func (llb *LowLatencyBuffer) WriteUint(prefix string, value uint64) {
+	var tmp [intFmtBufLen]byte
+	llb.writeValueSegments(prefix, strconv.AppendUint(tmp[:0], value, 10))
+}
+
+// WriteFloat appends prefix + the value formatted as 'f' with 6 decimals, no allocation.
+func (llb *LowLatencyBuffer) WriteFloat(prefix string, value float64) {
+	var tmp [floatFmtBufLen]byte
+	llb.writeValueSegments(prefix, strconv.AppendFloat(tmp[:0], value, 'f', 6, 64))
+}
+
+// writeSegments appends prefix followed by value (both strings) as one protocol
+// line, retrying if the active buffer set is swapped out mid-write. Sharding is
+// by prefix (see WriteLine).
+func (llb *LowLatencyBuffer) writeSegments(prefix, value string) {
+	shardIndex := llb.shardIndexFor(prefix)
 	for {
 		state := llb.activeBufferState.Load()
 		buffer := llb.bufferShardForState(state, shardIndex)
-		if llb.writeToActiveShard(buffer, state, lineBytes) {
+		if buffer.appendLine(&llb.activeBufferState, state, prefix, value) {
 			return
 		}
 	}
+}
+
+// writeValueSegments is writeSegments for a value that arrives as bytes (a
+// number formatted into a caller stack buffer), so numeric emission avoids the
+// intermediate value-string allocation. value must not be retained past the
+// call; it is copied into the shard chunk under lock.
+func (llb *LowLatencyBuffer) writeValueSegments(prefix string, value []byte) {
+	shardIndex := llb.shardIndexFor(prefix)
+	for {
+		state := llb.activeBufferState.Load()
+		buffer := llb.bufferShardForState(state, shardIndex)
+		if buffer.appendLineBytes(&llb.activeBufferState, state, prefix, value) {
+			return
+		}
+	}
+}
+
+// appendLine and appendLineBytes append "prefix + value" into the shard's active
+// chunk under lock, returning false to signal a retry when the buffer set was
+// swapped after the shard was selected. They are identical except for the value
+// type (string vs []byte); Go's append accepts both, but a single generic body
+// cannot cover both core types without an allocation, so the small locked tail
+// is written twice. Keep them in sync.
+func (b *bufferShard) appendLine(state *atomic.Uint64, expected uint64, prefix, value string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if state.Load() != expected {
+		return false
+	}
+	if !b.reserveChunkForLine(len(prefix) + len(value)) {
+		// overflows (drops) are counted in reserveChunkForLine, for metric reporting
+		return true
+	}
+	if len(b.data[b.chunkIndex]) > 0 {
+		// chunk has data, so add the separator to end the previous line
+		b.data[b.chunkIndex] = append(b.data[b.chunkIndex], separator...)
+	}
+	b.data[b.chunkIndex] = append(b.data[b.chunkIndex], prefix...)
+	b.data[b.chunkIndex] = append(b.data[b.chunkIndex], value...)
+	return true
+}
+
+func (b *bufferShard) appendLineBytes(state *atomic.Uint64, expected uint64, prefix string, value []byte) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if state.Load() != expected {
+		return false
+	}
+	if !b.reserveChunkForLine(len(prefix) + len(value)) {
+		return true
+	}
+	if len(b.data[b.chunkIndex]) > 0 {
+		b.data[b.chunkIndex] = append(b.data[b.chunkIndex], separator...)
+	}
+	b.data[b.chunkIndex] = append(b.data[b.chunkIndex], prefix...)
+	b.data[b.chunkIndex] = append(b.data[b.chunkIndex], value...)
+	return true
 }
 
 func (llb *LowLatencyBuffer) bufferShardForState(state uint64, shardIndex int) *bufferShard {
@@ -173,31 +269,6 @@ func (llb *LowLatencyBuffer) bufferShardForState(state uint64, shardIndex int) *
 
 func frontBuffersActive(state uint64) bool {
 	return state%2 == 0
-}
-
-func (llb *LowLatencyBuffer) writeToActiveShard(buffer *bufferShard, state uint64, lineBytes []byte) bool {
-	// Add the line to the appropriate chunk in the buffer shard, or drop, if it overflows
-	buffer.mu.Lock()
-	defer buffer.mu.Unlock()
-
-	if llb.activeBufferState.Load() != state {
-		return false
-	}
-
-	// Check if current chunk can fit the new data
-	idx := buffer.getChunkIndexForLine(lineBytes)
-	if idx == -1 {
-		// overflows (drops) are counted in getChunkIndexForLine, for metric reporting
-		return true
-	}
-
-	// We can write to the selected chunk
-	if len(buffer.data[buffer.chunkIndex]) > 0 {
-		// buffer has data, so add the separator, to indicate the end of the previous line
-		buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], []byte(separator)...)
-	}
-	buffer.data[buffer.chunkIndex] = append(buffer.data[buffer.chunkIndex], lineBytes...)
-	return true
 }
 
 // shardIndexFor returns the shard a protocol line should be written to. Lines for the same

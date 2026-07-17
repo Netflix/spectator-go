@@ -1,8 +1,6 @@
 package meter
 
 import (
-	"strconv"
-
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 )
 
@@ -24,19 +22,27 @@ func NewAgeGauge(id *Id, writer writer.Writer) *AgeGauge {
 	return &AgeGauge{id, writer, "A:" + id.spectatordId + ":"}
 }
 
-// MeterId returns the meter identifier.
+// NewAgeGaugeDirect generates a new age gauge directly from a name and tags,
+// without allocating an *Id or copying the tags map. commonTags carries the
+// registry's extraCommonTags.
+func NewAgeGaugeDirect(name string, tags, commonTags map[string]string, writer writer.Writer) *AgeGauge {
+	return &AgeGauge{nil, writer, buildLinePrefix("A", name, tags, commonTags)}
+}
+
+// MeterId returns the meter identifier, reconstructing it from the line prefix
+// if the gauge was created directly from a name and tags.
 func (g *AgeGauge) MeterId() *Id {
-	return g.id
+	return resolveMeterId(g.id, g.linePrefix)
 }
 
 // Set records the current time in seconds since the epoch.
 func (g *AgeGauge) Set(seconds int64) {
 	if seconds >= 0 {
-		g.writer.Write(g.linePrefix + strconv.FormatInt(seconds, 10))
+		g.writer.WriteInt(g.linePrefix, seconds)
 	}
 }
 
 // Now records the current time in epoch seconds, using a spectatord feature.
 func (g *AgeGauge) Now() {
-	g.writer.Write(g.linePrefix + "0")
+	g.writer.WriteLine(g.linePrefix, "0")
 }

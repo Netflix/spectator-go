@@ -24,6 +24,22 @@ func (f *FileWriter) Write(line string) {
 	f.WriteString(line)
 }
 
+func (f *FileWriter) WriteLine(prefix, value string) {
+	f.WriteString(prefix + value)
+}
+
+func (f *FileWriter) WriteInt(prefix string, value int64) {
+	f.WriteString(formatLineInt(prefix, value))
+}
+
+func (f *FileWriter) WriteUint(prefix string, value uint64) {
+	f.WriteString(formatLineUint(prefix, value))
+}
+
+func (f *FileWriter) WriteFloat(prefix string, value float64) {
+	f.WriteString(formatLineFloat(prefix, value))
+}
+
 func (f *FileWriter) WriteBytes(line []byte) {
 	f.WriteString(string(line))
 }

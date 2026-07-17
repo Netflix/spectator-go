@@ -20,7 +20,7 @@ type unixgramBufferWriter struct {
 }
 
 func NewUnixgramWriter(path string, logger logger.Logger) (*UnixgramWriter, error) {
-	return NewUnixgramWriterWithBuffer(path, logger, 0, 5 * time.Second)
+	return NewUnixgramWriterWithBuffer(path, logger, 0, 5*time.Second)
 }
 
 func NewUnixgramWriterWithBuffer(path string, logger logger.Logger, bufferSize int, flushInterval time.Duration) (*UnixgramWriter, error) {
@@ -64,6 +64,57 @@ func (u *UnixgramWriter) Write(line string) {
 	}
 
 	u.WriteString(line)
+}
+
+func (u *UnixgramWriter) WriteLine(prefix, value string) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteLine(prefix, value)
+		return
+	}
+
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteLine(prefix, value)
+		return
+	}
+
+	// Direct writes need a single contiguous datagram, so concatenate here.
+	u.WriteString(prefix + value)
+}
+
+func (u *UnixgramWriter) WriteInt(prefix string, value int64) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteInt(prefix, value)
+		return
+	}
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteInt(prefix, value)
+		return
+	}
+	u.WriteString(formatLineInt(prefix, value))
+}
+
+func (u *UnixgramWriter) WriteUint(prefix string, value uint64) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteUint(prefix, value)
+		return
+	}
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteUint(prefix, value)
+		return
+	}
+	u.WriteString(formatLineUint(prefix, value))
+}
+
+func (u *UnixgramWriter) WriteFloat(prefix string, value float64) {
+	if u.lineBuffer != nil {
+		u.lineBuffer.WriteFloat(prefix, value)
+		return
+	}
+	if u.lowLatencyBuffer != nil {
+		u.lowLatencyBuffer.WriteFloat(prefix, value)
+		return
+	}
+	u.WriteString(formatLineFloat(prefix, value))
 }
 
 func (u *UnixgramWriter) WriteBytes(line []byte) {
@@ -121,7 +172,6 @@ func (u *UnixgramWriter) redialSocket() {
 		u.conn = conn
 	}
 }
-
 
 func (u *UnixgramWriter) Close() error {
 	// Stop flush timer, and flush remaining lines

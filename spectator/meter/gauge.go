@@ -2,7 +2,6 @@ package meter
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
 	"time"
@@ -32,18 +31,31 @@ func NewGaugeWithTTL(id *Id, writer writer.Writer, ttl time.Duration) *Gauge {
 	return &Gauge{id, writer, fmt.Sprintf("g,%d", int(ttl.Seconds())) + ":" + id.spectatordId + ":"}
 }
 
-// MeterId returns the meter identifier.
+// NewGaugeDirect generates a new gauge directly from a name and tags, without
+// allocating an *Id or copying the tags map. commonTags carries the registry's
+// extraCommonTags.
+func NewGaugeDirect(name string, tags, commonTags map[string]string, writer writer.Writer) *Gauge {
+	return &Gauge{nil, writer, buildLinePrefix("g", name, tags, commonTags)}
+}
+
+// NewGaugeDirectWithTTL generates a new gauge with a ttl directly from a name and tags.
+func NewGaugeDirectWithTTL(name string, tags, commonTags map[string]string, writer writer.Writer, ttl time.Duration) *Gauge {
+	return &Gauge{nil, writer, buildLinePrefix(fmt.Sprintf("g,%d", int(ttl.Seconds())), name, tags, commonTags)}
+}
+
+// MeterId returns the meter identifier, reconstructing it from the line prefix
+// if the gauge was created directly from a name and tags.
 func (g *Gauge) MeterId() *Id {
-	return g.id
+	return resolveMeterId(g.id, g.linePrefix)
 }
 
 // Set records the current value.
 func (g *Gauge) Set(value float64) {
-	g.writer.Write(g.linePrefix + strconv.FormatFloat(value, 'f', 6, 64))
+	g.writer.WriteFloat(g.linePrefix, value)
 }
 
 // SetInt records the current value as an integer, avoiding the overhead of
 // float64 conversion and formatting.
 func (g *Gauge) SetInt(value int64) {
-	g.writer.Write(g.linePrefix + strconv.FormatInt(value, 10))
+	g.writer.WriteInt(g.linePrefix, value)
 }

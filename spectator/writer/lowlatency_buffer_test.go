@@ -247,7 +247,7 @@ func TestLowLatencyBuffer_RejectsStaleShardSelectionAfterSwap(t *testing.T) {
 	if !frontBuffersActive(buffer.activeBufferState.Load()) {
 		t.Fatalf("Expected front buffers to be active after two swaps")
 	}
-	if buffer.writeToActiveShard(staleShard, staleState, []byte(staleLine)) {
+	if staleShard.appendLine(&buffer.activeBufferState, staleState, staleLine, "") {
 		t.Fatal("Expected stale buffer selection to be rejected")
 	}
 

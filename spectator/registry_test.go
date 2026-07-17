@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"github.com/Netflix/spectator-go/v2/spectator/writer"
+	"strings"
 	"testing"
 	"time"
 )
@@ -69,6 +70,46 @@ func TestRegistryWithMemoryWriter_CounterWithId(t *testing.T) {
 	expected := "c:test_counter,extra-tag=foo:1"
 	if len(mw.Lines()) != 1 || mw.Lines()[0] != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, mw.Lines()[0])
+	}
+}
+
+// TestRegistryWithMemoryWriter_CounterCommonTags guards against the name+tags
+// registry path dropping extraCommonTags (which the *WithId tests cover but the
+// name+tags tests, using a registry without common tags, did not).
+func TestRegistryWithMemoryWriter_CounterCommonTags(t *testing.T) {
+	r := NewTestRegistryWithCommonTags()
+	mw := r.GetWriter().(*writer.MemoryWriter)
+
+	r.Counter("test_counter", nil).Increment()
+
+	expected := "c:test_counter,extra-tag=foo:1"
+	if len(mw.Lines()) != 1 || mw.Lines()[0] != expected {
+		t.Errorf("Expected '%s', got '%v'", expected, mw.Lines())
+	}
+}
+
+// TestRegistryWithMemoryWriter_CounterCommonTagsMerge verifies caller tags and
+// common tags are merged on the name+tags path, with common tags winning on a
+// key collision (matching the WithId/NewId behavior).
+func TestRegistryWithMemoryWriter_CounterCommonTagsMerge(t *testing.T) {
+	config, _ := NewConfig("memory", map[string]string{"extra-tag": "common", "region": "us-east-1"}, logger.NewDefaultLogger())
+	r, _ := NewRegistry(config)
+	mw := r.GetWriter().(*writer.MemoryWriter)
+
+	// "extra-tag" collides with a common tag (common wins); "app" is caller-only.
+	r.Counter("test_counter", map[string]string{"app": "foo", "extra-tag": "caller"}).Increment()
+
+	if len(mw.Lines()) != 1 {
+		t.Fatalf("expected 1 line, got %v", mw.Lines())
+	}
+	got := mw.Lines()[0]
+	for _, want := range []string{"c:test_counter", ",app=foo", ",extra-tag=common", ",region=us-east-1", ":1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("line %q missing %q", got, want)
+		}
+	}
+	if strings.Contains(got, "extra-tag=caller") {
+		t.Errorf("common tag should win over caller tag, got %q", got)
 	}
 }
 
