@@ -2,12 +2,14 @@ package writer
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/Netflix/spectator-go/v2/spectator/logger"
 )
 
 func splitAndFilterMetricLines(memWriter *MemoryWriter) []string {
@@ -297,6 +299,42 @@ func TestLowLatencyBuffer_OrderSensitiveMeterIdKey(t *testing.T) {
 	}
 }
 
+func TestLowLatencyBuffer_MeterIdKey(t *testing.T) {
+	tests := []struct {
+		line string
+		key  string
+		ok   bool
+	}{
+		{line: "g:test.metric:1", key: "test.metric", ok: true},
+		{line: "g,60:test.metric:1", key: "test.metric", ok: true},
+		{line: "A:test.metric:1", key: "test.metric", ok: true},
+		// Unlike orderSensitiveMeterIdKey, commutative types yield an id
+		{line: "c:test.metric:1", key: "test.metric", ok: true},
+		{line: "d:test.metric:1", key: "test.metric", ok: true},
+		{line: "t:test.metric:1", key: "test.metric", ok: true},
+		{line: "gauge:test.metric:1", key: "test.metric", ok: true},
+		{line: "c:test.metric,app=foo:1", key: "test.metric,app=foo", ok: true},
+		// WriteLine passes the prefix alone, which ends with the value separator
+		{line: "c:test.metric:", key: "test.metric", ok: true},
+		{line: ":test.metric:1", key: "test.metric", ok: true},
+		{line: "message=1", ok: false},
+		{line: "g:test.metric", ok: false},
+		{line: "", ok: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.line, func(t *testing.T) {
+			key, ok := meterIdKey(test.line)
+			if ok != test.ok {
+				t.Fatalf("Expected ok=%t, got %t", test.ok, ok)
+			}
+			if key != test.key {
+				t.Fatalf("Expected key %q, got %q", test.key, key)
+			}
+		})
+	}
+}
+
 func TestLowLatencyBuffer_RoundRobinsSameCounterId(t *testing.T) {
 	shards := runtime.NumCPU()
 	if shards < 2 {
@@ -378,5 +416,139 @@ func TestLowLatencyBuffer_ChunkBoundaries_OverMaxSizeIsDropped(t *testing.T) {
 	lines := splitAndFilterMetricLines(memWriter)
 	if len(lines) != 0 {
 		t.Errorf("Expected %d lines, got %d", 0, len(lines))
+	}
+}
+
+// captureLogger records Infof messages, so the once-per-flush-window overflow log line
+// can be inspected.
+type captureLogger struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+var _ logger.Logger = (*captureLogger)(nil)
+
+func (l *captureLogger) Debugf(_ string, _ ...interface{}) {}
+
+func (l *captureLogger) Infof(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.messages = append(l.messages, fmt.Sprintf(format, v...))
+}
+
+func (l *captureLogger) Errorf(_ string, _ ...interface{}) {}
+
+// overflowMessages returns the overflow log lines, discarding the initialization message.
+func (l *captureLogger) overflowMessages() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var messages []string
+	for _, message := range l.messages {
+		if strings.Contains(message, "LowLatencyBuffer overflow") {
+			messages = append(messages, message)
+		}
+	}
+	return messages
+}
+
+// newSingleChunkBuffer creates a buffer with one chunk per shard and a long flush interval
+// timer, to allow for manual flush trigger. One chunk per shard means a single chunkSize
+// line fills a shard, and every subsequent line written to it is dropped.
+func newSingleChunkBuffer(t *testing.T, memWriter *MemoryWriter, log logger.Logger) *LowLatencyBuffer {
+	t.Helper()
+	shards := runtime.NumCPU()
+	bufferSize := 2 * chunkSize * shards // two buffer sets, one 60 KB chunk/shard
+	buffer := NewLowLatencyBuffer(memWriter, log, bufferSize, 3*time.Minute)
+	t.Cleanup(buffer.Close)
+	return buffer
+}
+
+// appendToShard writes a line to a specific shard, bypassing shard selection, so tests can
+// drive overflows deterministically regardless of the number of CPUs.
+func appendToShard(t *testing.T, buffer *LowLatencyBuffer, shard *bufferShard, line string) {
+	t.Helper()
+	state := buffer.activeBufferState.Load()
+	if !shard.appendLine(&buffer.activeBufferState, state, line, "") {
+		t.Fatalf("Expected line %q to be accepted by the active buffer set", line)
+	}
+}
+
+// fillShard writes one chunkSize line to the shard, which leaves the shard with data to
+// flush and no room for any further line.
+func fillShard(t *testing.T, buffer *LowLatencyBuffer, shard *bufferShard) {
+	t.Helper()
+	const prefix = "g:overflow.fill:"
+	appendToShard(t, buffer, shard, prefix+strings.Repeat("1", chunkSize-len(prefix)))
+
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if shard.overflows != 0 {
+		t.Fatalf("Expected the fill line to be stored, got %d overflow(s)", shard.overflows)
+	}
+}
+
+func TestBufferShard_RecordOverflowSamplesFirstDroppedId(t *testing.T) {
+	shard := &bufferShard{}
+
+	shard.recordOverflow("g:first.dropped:1", 17)
+	shard.recordOverflow("g:second.dropped:1", 18)
+
+	if shard.overflows != 2 {
+		t.Errorf("Expected %d overflows, got %d", 2, shard.overflows)
+	}
+	if shard.overflowBytes != 35 {
+		t.Errorf("Expected %d overflow bytes, got %d", 35, shard.overflowBytes)
+	}
+	if shard.droppedSampleId != "first.dropped" {
+		t.Errorf("Expected the first dropped meter id to be sampled, got %q", shard.droppedSampleId)
+	}
+}
+
+func TestLowLatencyBuffer_OverflowLogsOncePerFlushWindow(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	buffer := newSingleChunkBuffer(t, memWriter, log)
+
+	shard := buffer.frontBuffers[0]
+	fillShard(t, buffer, shard)
+
+	dropped := []string{"g:overflow.dropped:1", "g:overflow.dropped:2", "c:other.dropped:3"}
+	var droppedBytes int
+	for _, line := range dropped {
+		appendToShard(t, buffer, shard, line)
+		droppedBytes += len(line)
+	}
+
+	buffer.swapAndFlush()
+
+	messages := log.overflowMessages()
+	if len(messages) != 1 {
+		t.Fatalf("Expected 1 overflow log line for the flush window, got %d: %v", len(messages), messages)
+	}
+	message := messages[0]
+	for _, want := range []string{
+		"bufferSet=front",
+		fmt.Sprintf("dropped %d lines (%d bytes)", len(dropped), droppedBytes),
+		"sample dropped meter id: overflow.dropped",
+	} {
+		if !strings.Contains(message, want) {
+			t.Errorf("Expected overflow log line to contain %q, got %q", want, message)
+		}
+	}
+
+	// The per-shard overflow metrics are unchanged by the log line
+	overflowMetrics := map[string]bool{
+		fmt.Sprintf("c:spectator-go.lowLatencyBuffer.overflows,bufferSet=front:%d", len(dropped)):     false,
+		fmt.Sprintf("d:spectator-go.lowLatencyBuffer.overflowBytes,bufferSet=front:%d", droppedBytes): false,
+	}
+	for _, line := range memWriter.Lines() {
+		if _, ok := overflowMetrics[line]; ok {
+			overflowMetrics[line] = true
+		}
+	}
+	for line, found := range overflowMetrics {
+		if !found {
+			t.Errorf("Expected metric line %q in MemoryWriter, got %v", line, memWriter.Lines())
+		}
 	}
 }

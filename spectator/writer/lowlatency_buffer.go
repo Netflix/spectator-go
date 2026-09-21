@@ -31,35 +31,47 @@ const separator = "\n"
 // is less than the impact of the front and back buffer design, but it is still important for
 // throughput reasons.
 type bufferShard struct {
-	data          [][]byte // Array of chunkSize chunks of spectatord protocol lines, stored as bytes
-	chunkIndex    int      // Index of the chunk available for writes
-	overflows     int      // Count the buffer overflows, which correspond to data drops, for reporting metrics
-	overflowBytes int64    // Count the bytes that were dropped, for reporting metrics
-	mu            sync.Mutex
+	data            [][]byte // Array of chunkSize chunks of spectatord protocol lines, stored as bytes
+	chunkIndex      int      // Index of the chunk available for writes
+	overflows       int      // Count the buffer overflows, which correspond to data drops, for reporting metrics
+	overflowBytes   int64    // Count the bytes that were dropped, for reporting metrics
+	droppedSampleId string   // Meter id of one dropped line this window, for the overflow log line
+	mu              sync.Mutex
 }
 
-// getChunkIndexForLine returns the chunkIndex that should be used for storing the line, or -1, if there is
-// an overflow and the line cannot be stored in the bufferShard. It reports
-// whether space was reserved (true) or the data must be dropped (false); on
-// success b.chunkIndex identifies the chunk to append into (advancing it if the
-// line does not fit in the current chunk).
-func (b *bufferShard) reserveChunkForLine(lineLen int) bool {
-	totalWriteLength := lineLen
+// recordOverflow accounts for a dropped line's byte count and, on the first drop of the
+// window (overflows was 0), samples its meter id via meterIdKey so the once-per-window log
+// line can name a metric instead of just a count.
+func (b *bufferShard) recordOverflow(prefix string, totalWriteLength int) {
+	if b.overflows == 0 {
+		if id, ok := meterIdKey(prefix); ok {
+			b.droppedSampleId = id
+		} else {
+			b.droppedSampleId = prefix
+		}
+	}
+	b.overflows++
+	b.overflowBytes += int64(totalWriteLength)
+}
 
+// reserveChunkForLine reports whether space was reserved for a line of lineLen bytes (true)
+// or the buffer is full and the line must be dropped (false). On success b.chunkIndex
+// identifies the chunk to append into (advancing it if the line does not fit in the current
+// chunk). It does not record overflow stats itself: the caller has the line's prefix (needed
+// to sample a dropped meter id for the overflow log line) and calls recordOverflow when this
+// returns false.
+func (b *bufferShard) reserveChunkForLine(lineLen int) bool {
 	// All chunks are full for the shard, drop the data
 	if b.chunkIndex >= len(b.data) {
-		b.overflows++
-		b.overflowBytes += int64(totalWriteLength)
 		return false
 	}
 
 	// This should not happen, drop the data. The maximum length of a well-formed protocol line is 3.8KB.
 	if lineLen > chunkSize {
-		b.overflows++
-		b.overflowBytes += int64(totalWriteLength)
 		return false
 	}
 
+	totalWriteLength := lineLen
 	if len(b.data[b.chunkIndex]) > 0 {
 		// Chunk has data, so account for the separator character
 		totalWriteLength++
@@ -72,8 +84,6 @@ func (b *bufferShard) reserveChunkForLine(lineLen int) bool {
 
 	// Out of space in the shard, drop the data
 	if b.chunkIndex == len(b.data) {
-		b.overflows++
-		b.overflowBytes += int64(totalWriteLength)
 		return false
 	}
 
@@ -230,7 +240,7 @@ func (b *bufferShard) appendLine(state *atomic.Uint64, expected uint64, prefix, 
 		return false
 	}
 	if !b.reserveChunkForLine(len(prefix) + len(value)) {
-		// overflows (drops) are counted in reserveChunkForLine, for metric reporting
+		b.recordOverflow(prefix, len(prefix)+len(value))
 		return true
 	}
 	if len(b.data[b.chunkIndex]) > 0 {
@@ -250,6 +260,7 @@ func (b *bufferShard) appendLineBytes(state *atomic.Uint64, expected uint64, pre
 		return false
 	}
 	if !b.reserveChunkForLine(len(prefix) + len(value)) {
+		b.recordOverflow(prefix, len(prefix)+len(value))
 		return true
 	}
 	if len(b.data[b.chunkIndex]) > 0 {
@@ -293,6 +304,23 @@ func orderSensitiveMeterIdKey(line string) (string, bool) {
 		return "", false
 	}
 	if !isOrderSensitiveMeterType(line[:first]) {
+		return "", false
+	}
+	last := strings.LastIndexByte(line, ':')
+	if last <= first {
+		return "", false
+	}
+	return line[first+1 : last], true
+}
+
+// meterIdKey returns the id substring of a spectatord protocol line for any
+// meter type, order-sensitive or not. The input format is the same
+// "<type>[,<extra>]:<id>:<value>" line; the id is the substring between the
+// first and last ':'. Returns ok=false for malformed lines (fewer than two ':'
+// characters).
+func meterIdKey(line string) (string, bool) {
+	first := strings.IndexByte(line, ':')
+	if first < 0 {
 		return "", false
 	}
 	last := strings.LastIndexByte(line, ':')
@@ -367,9 +395,22 @@ func (llb *LowLatencyBuffer) swapAndFlush() {
 	}
 
 	// Flush each buffer shard, from the deactivated set
-	var bytesWritten int
+	var bytesWritten, totalOverflows int
+	var totalOverflowBytes int64
+	var droppeSampleId string
 	for _, buffer := range buffersToFlush {
-		bytesWritten += llb.flushBufferShard(buffer, bufferSet)
+		flushed := llb.flushBufferShard(buffer, bufferSet)
+		bytesWritten += flushed.bytesWritten
+		totalOverflows += flushed.overflows
+		totalOverflowBytes += flushed.overflowBytes
+		if droppeSampleId == "" {
+			droppeSampleId = flushed.droppedSampleId
+		}
+	}
+
+	// Log a single overflow for each window.
+	if totalOverflows > 0 {
+		llb.logger.Infof("LowLatencyBuffer overflow in bufferSet=%s: dropped %d lines (%d bytes) this window; sample dropped meter id: %s", bufferSet, totalOverflows, totalOverflowBytes, droppeSampleId)
 	}
 
 	pctUsage := float64(bytesWritten) / float64(llb.bufferSetSize)
@@ -383,14 +424,21 @@ func (llb *LowLatencyBuffer) swapAndFlush() {
 	llb.writer.WriteString(fmt.Sprintf("t:spectator-go.lowLatencyBuffer.flushTime,bufferSet=%s:%f", bufferSet, time.Since(start).Seconds()))
 }
 
+type flushBufferResult struct {
+	bytesWritten,
+	overflows int
+	overflowBytes   int64
+	droppedSampleId string
+}
+
 // flushBufferShard flushes a single bufferShard to the socket, iterating through all chunks
-func (llb *LowLatencyBuffer) flushBufferShard(buffer *bufferShard, bufferSet string) int {
+func (llb *LowLatencyBuffer) flushBufferShard(buffer *bufferShard, bufferSet string) flushBufferResult {
 	buffer.mu.Lock()
 	defer buffer.mu.Unlock()
 
 	// If there is no data to flush from the shard, then skip socket writes
 	if buffer.chunkIndex == 0 && len(buffer.data[0]) == 0 {
-		return 0
+		return flushBufferResult{}
 	}
 
 	// Write each chunk to the socket, and reset the chunk
@@ -404,14 +452,21 @@ func (llb *LowLatencyBuffer) flushBufferShard(buffer *bufferShard, bufferSet str
 	}
 
 	// record status metrics and reset shard statistics
-	if buffer.overflows > 0 {
-		llb.writer.WriteString(fmt.Sprintf("c:spectator-go.lowLatencyBuffer.overflows,bufferSet=%s:%d", bufferSet, buffer.overflows))
-		llb.writer.WriteString(fmt.Sprintf("d:spectator-go.lowLatencyBuffer.overflowBytes,bufferSet=%s:%d", bufferSet, buffer.overflowBytes))
+	overflows, overflowBytes, sampleId := buffer.overflows, buffer.overflowBytes, buffer.droppedSampleId
+	if overflows > 0 {
+		llb.writer.WriteString(fmt.Sprintf("c:spectator-go.lowLatencyBuffer.overflows,bufferSet=%s:%d", bufferSet, overflows))
+		llb.writer.WriteString(fmt.Sprintf("d:spectator-go.lowLatencyBuffer.overflowBytes,bufferSet=%s:%d", bufferSet, overflowBytes))
 		buffer.overflows = 0
 		buffer.overflowBytes = 0
+		buffer.droppedSampleId = ""
 	}
 	buffer.chunkIndex = 0
-	return bytesWritten
+	return flushBufferResult{
+		bytesWritten:    bytesWritten,
+		overflows:       overflows,
+		overflowBytes:   overflowBytes,
+		droppedSampleId: sampleId,
+	}
 }
 
 func (llb *LowLatencyBuffer) Close() {
