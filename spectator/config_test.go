@@ -4,6 +4,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
@@ -11,6 +12,7 @@ func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 	_ = os.Setenv("NETFLIX_PROCESS_NAME", "process_name")
 	defer os.Unsetenv("TITUS_CONTAINER_NAME")
 	defer os.Unsetenv("NETFLIX_PROCESS_NAME")
+	t.Setenv("NETFLIX_CONTAINER_NAME", "") // an injected value would otherwise beat TITUS_CONTAINER_NAME
 
 	tags := map[string]string{
 		"nf.app":     "app",
@@ -39,12 +41,13 @@ func TestConfigMergesCommonTagsWithEnvVariables(t *testing.T) {
 	}
 }
 
-// Test passed in values wins over env variables
+// Test env variables win over passed in values
 func TestConfigMergesCommonTagsWithEnvVariablesAndPassedInValues(t *testing.T) {
 	_ = os.Setenv("TITUS_CONTAINER_NAME", "container_name_via_env")
 	_ = os.Setenv("NETFLIX_PROCESS_NAME", "process_name_by_env")
 	defer os.Unsetenv("TITUS_CONTAINER_NAME")
 	defer os.Unsetenv("NETFLIX_PROCESS_NAME")
+	t.Setenv("NETFLIX_CONTAINER_NAME", "")
 
 	tags := map[string]string{
 		"nf.app":       "app",
@@ -72,6 +75,66 @@ func TestConfigMergesCommonTagsWithEnvVariablesAndPassedInValues(t *testing.T) {
 
 	if !reflect.DeepEqual(expectedTags, meterId.Tags()) {
 		t.Errorf("Expected tags %#v, got %#v", expectedTags, meterId.Tags())
+	}
+}
+
+// Test NETFLIX_CONTAINER_NAME wins over TITUS_CONTAINER_NAME, and env variables win over passed in values
+func TestConfigNetflixContainerNameWinsOverTitusAndPassedInValues(t *testing.T) {
+	t.Setenv("NETFLIX_CONTAINER_NAME", "web")
+	t.Setenv("TITUS_CONTAINER_NAME", "main")
+	t.Setenv("NETFLIX_PROCESS_NAME", "processA")
+
+	tags := map[string]string{
+		"nf.app":       "app",
+		"nf.container": "passed_in_container",
+		"nf.process":   "passed_in_process",
+	}
+
+	config, err := NewConfig("", tags, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedTags := map[string]string{
+		"nf.app":       "app",
+		"nf.container": "web",
+		"nf.process":   "processA",
+	}
+
+	if !reflect.DeepEqual(expectedTags, config.extraCommonTags) {
+		t.Errorf("Expected tags %#v, got %#v", expectedTags, config.extraCommonTags)
+	}
+}
+
+// Test NewConfigWithoutEnvTags keeps the passed in values and ignores the env variables
+func TestNewConfigWithoutEnvTags(t *testing.T) {
+	t.Setenv("NETFLIX_CONTAINER_NAME", "web")
+	t.Setenv("TITUS_CONTAINER_NAME", "main")
+	t.Setenv("NETFLIX_PROCESS_NAME", "processA")
+
+	tags := map[string]string{
+		"nf.app":       "app",
+		"nf.container": "passed_in_container",
+	}
+
+	config, err := NewConfigWithoutEnvTags("memory", tags, nil, 1024, time.Second)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// the passed in nf.container is kept, and no nf.process is added from the env variables
+	expectedTags := map[string]string{
+		"nf.app":       "app",
+		"nf.container": "passed_in_container",
+	}
+
+	if !reflect.DeepEqual(expectedTags, config.extraCommonTags) {
+		t.Errorf("Expected tags %#v, got %#v", expectedTags, config.extraCommonTags)
+	}
+
+	if config.location != "memory" || config.bufferSize != 1024 || config.flushInterval != time.Second {
+		t.Errorf("Expected location 'memory', bufferSize 1024 and flushInterval 1s, got '%s', %d and %v",
+			config.location, config.bufferSize, config.flushInterval)
 	}
 }
 
@@ -130,6 +193,7 @@ func TestConfigMergesIgnoresCommonTagsWithEnvVariablesEmptyValues(t *testing.T) 
 	_ = os.Setenv("NETFLIX_PROCESS_NAME", "")
 	defer os.Unsetenv("TITUS_CONTAINER_NAME")
 	defer os.Unsetenv("NETFLIX_PROCESS_NAME")
+	t.Setenv("NETFLIX_CONTAINER_NAME", "")
 
 	tags := map[string]string{
 		"nf.app":     "app",
@@ -157,6 +221,8 @@ func TestConfigMergesIgnoresCommonTagsWithEnvVariablesEmptyValues(t *testing.T) 
 }
 
 func TestConfigMergesIgnoresTagsWithPassedInValuesEmptyValues(t *testing.T) {
+	clearEnvTags(t)
+
 	tags := map[string]string{
 		"nf.app":     "app",
 		"nf.account": "",

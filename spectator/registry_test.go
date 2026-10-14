@@ -9,20 +9,22 @@ import (
 	"time"
 )
 
-func NewTestRegistry() Registry {
+func NewTestRegistry(t *testing.T) Registry {
+	clearEnvTags(t)
 	config, _ := NewConfig("memory", nil, logger.NewDefaultLogger())
 	r, _ := NewRegistry(config)
 	return r
 }
 
-func NewTestRegistryWithCommonTags() Registry {
+func NewTestRegistryWithCommonTags(t *testing.T) Registry {
+	clearEnvTags(t)
 	config, _ := NewConfig("memory", map[string]string{"extra-tag": "foo"}, logger.NewDefaultLogger())
 	r, _ := NewRegistry(config)
 	return r
 }
 
 func TestRegistryWithMemoryWriter_AgeGauge(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	ageGauge := r.AgeGauge("test_age_gauge", nil)
@@ -35,7 +37,7 @@ func TestRegistryWithMemoryWriter_AgeGauge(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_AgeGaugeWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	ageGauge := r.AgeGaugeWithId(r.NewId("test_age_gauge", nil))
@@ -48,7 +50,7 @@ func TestRegistryWithMemoryWriter_AgeGaugeWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_Counter(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	counter := r.Counter("test_counter", nil)
@@ -61,7 +63,7 @@ func TestRegistryWithMemoryWriter_Counter(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_CounterWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	counter := r.CounterWithId(r.NewId("test_counter", nil))
@@ -77,7 +79,7 @@ func TestRegistryWithMemoryWriter_CounterWithId(t *testing.T) {
 // registry path dropping extraCommonTags (which the *WithId tests cover but the
 // name+tags tests, using a registry without common tags, did not).
 func TestRegistryWithMemoryWriter_CounterCommonTags(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	r.Counter("test_counter", nil).Increment()
@@ -114,7 +116,7 @@ func TestRegistryWithMemoryWriter_CounterCommonTagsMerge(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_DistributionSummary(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	distSummary := r.DistributionSummary("test_distributionsummary", nil)
@@ -127,7 +129,7 @@ func TestRegistryWithMemoryWriter_DistributionSummary(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_DistributionSummaryWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	distSummary := r.DistributionSummaryWithId(r.NewId("test_distributionsummary", nil))
@@ -140,7 +142,7 @@ func TestRegistryWithMemoryWriter_DistributionSummaryWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_Gauge(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	gauge := r.Gauge("test_gauge", nil)
@@ -153,7 +155,7 @@ func TestRegistryWithMemoryWriter_Gauge(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_GaugeWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	gauge := r.GaugeWithId(r.NewId("test_gauge", nil))
@@ -166,7 +168,7 @@ func TestRegistryWithMemoryWriter_GaugeWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_GaugeWithTTL(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	ttl := 60 * time.Second
@@ -180,7 +182,7 @@ func TestRegistryWithMemoryWriter_GaugeWithTTL(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_GaugeWithIdWithTTL(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	ttl := 60 * time.Second
@@ -194,7 +196,7 @@ func TestRegistryWithMemoryWriter_GaugeWithIdWithTTL(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_MaxGauge(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	maxGauge := r.MaxGauge("test_maxgauge", nil)
@@ -207,7 +209,7 @@ func TestRegistryWithMemoryWriter_MaxGauge(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_MaxGaugeWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	maxGauge := r.MaxGaugeWithId(r.NewId("test_maxgauge", nil))
@@ -220,7 +222,7 @@ func TestRegistryWithMemoryWriter_MaxGaugeWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_MonotonicCounter(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	counter := r.MonotonicCounter("test_monotonic_counter", nil)
@@ -233,7 +235,7 @@ func TestRegistryWithMemoryWriter_MonotonicCounter(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_MonotonicCounterWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	counter := r.MonotonicCounterWithId(r.NewId("test_monotonic_counter", nil))
@@ -246,7 +248,7 @@ func TestRegistryWithMemoryWriter_MonotonicCounterWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_MonotonicCounterUint(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	counter := r.MonotonicCounterUint("test_monotonic_counter_uint", nil)
@@ -259,7 +261,7 @@ func TestRegistryWithMemoryWriter_MonotonicCounterUint(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_MonotonicCounterUintWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	counter := r.MonotonicCounterUintWithId(r.NewId("test_monotonic_counter_uint", nil))
@@ -272,7 +274,7 @@ func TestRegistryWithMemoryWriter_MonotonicCounterUintWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_PercentileDistributionSummary(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	percentileDistSummary := r.PercentileDistributionSummary("test_percentiledistributionsummary", nil)
@@ -285,7 +287,7 @@ func TestRegistryWithMemoryWriter_PercentileDistributionSummary(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_PercentileDistributionSummaryWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	percentileDistSummary := r.PercentileDistributionSummaryWithId(r.NewId("test_percentiledistributionsummary", nil))
@@ -298,7 +300,7 @@ func TestRegistryWithMemoryWriter_PercentileDistributionSummaryWithId(t *testing
 }
 
 func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	percentileTimer := r.PercentileTimer("test_percentiletimer", nil)
@@ -311,7 +313,7 @@ func TestRegistryWithMemoryWriter_PercentileTimer(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_PercentileTimerWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	percentileTimer := r.PercentileTimerWithId(r.NewId("test_percentiletimer", nil))
@@ -324,7 +326,7 @@ func TestRegistryWithMemoryWriter_PercentileTimerWithId(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_Timer(t *testing.T) {
-	r := NewTestRegistry()
+	r := NewTestRegistry(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	timer := r.Timer("test_timer", nil)
@@ -337,7 +339,7 @@ func TestRegistryWithMemoryWriter_Timer(t *testing.T) {
 }
 
 func TestRegistryWithMemoryWriter_TimerWithId(t *testing.T) {
-	r := NewTestRegistryWithCommonTags()
+	r := NewTestRegistryWithCommonTags(t)
 	mw := r.GetWriter().(*writer.MemoryWriter)
 
 	timer := r.TimerWithId(r.NewId("test_timer", nil))
