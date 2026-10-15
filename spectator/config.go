@@ -19,6 +19,9 @@ type Config struct {
 
 // NewConfig creates a new configuration with the provided location, extra common tags, and logger. All fields are
 // optional. The extra common tags are added to every metric, on top of the common tags provided by spectatord.
+// The nf.container tag (from NETFLIX_CONTAINER_NAME, falling back to TITUS_CONTAINER_NAME) and the nf.process
+// tag (from NETFLIX_PROCESS_NAME) are read from the environment and take precedence over the same keys in
+// extraCommonTags. Use NewConfigWithoutEnvTags to leave them out.
 //
 // Possible values for location are:
 //
@@ -70,12 +73,38 @@ func NewConfigWithBuffer(
 	bufferSize int, // defaults to 0 (disabled)
 	flushInterval time.Duration, // defaults to 5 seconds
 ) (*Config, error) {
+	return newConfig(location, extraCommonTags, log, bufferSize, flushInterval, true)
+}
+
+// NewConfigWithoutEnvTags creates a new configuration with the provided location, extra common tags, logger,
+// bufferSize, and flushInterval. It is the same as NewConfigWithBuffer, but does not add the nf.container and
+// nf.process tags from the environment. Use it in processes that report metrics on behalf of other containers or
+// processes, such as relays and agents, so their own identity does not overwrite the tags on the metrics they
+// forward.
+func NewConfigWithoutEnvTags(
+	location string, // defaults to `udp`
+	extraCommonTags map[string]string, // defaults to empty map
+	log logger.Logger, // defaults to default logger
+	bufferSize int, // defaults to 0 (disabled)
+	flushInterval time.Duration, // used when bufferSize > 0; NewConfig uses 5 seconds
+) (*Config, error) {
+	return newConfig(location, extraCommonTags, log, bufferSize, flushInterval, false)
+}
+
+func newConfig(
+	location string,
+	extraCommonTags map[string]string,
+	log logger.Logger,
+	bufferSize int,
+	flushInterval time.Duration,
+	includeEnvTags bool,
+) (*Config, error) {
 	location, err := calculateLocation(location)
 	if err != nil {
 		return nil, err
 	}
 
-	mergedTags := calculateExtraCommonTags(extraCommonTags)
+	mergedTags := calculateExtraCommonTags(extraCommonTags, includeEnvTags)
 
 	return &Config{
 		location:        location,
@@ -94,7 +123,7 @@ func calculateLogger(log logger.Logger) logger.Logger {
 	}
 }
 
-func calculateExtraCommonTags(extraCommonTags map[string]string) map[string]string {
+func calculateExtraCommonTags(extraCommonTags map[string]string, includeEnvTags bool) map[string]string {
 	mergedTags := make(map[string]string)
 
 	for k, v := range extraCommonTags {
@@ -102,6 +131,10 @@ func calculateExtraCommonTags(extraCommonTags map[string]string) map[string]stri
 		if k != "" && v != "" {
 			mergedTags[k] = v
 		}
+	}
+
+	if !includeEnvTags {
+		return mergedTags
 	}
 
 	// merge extra common tags with select env var tags; env var tags take precedence
