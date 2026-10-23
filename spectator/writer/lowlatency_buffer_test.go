@@ -2,12 +2,14 @@ package writer
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go/v2/spectator/logger"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/Netflix/spectator-go/v2/spectator/logger"
 )
 
 func splitAndFilterMetricLines(memWriter *MemoryWriter) []string {
@@ -297,6 +299,42 @@ func TestLowLatencyBuffer_OrderSensitiveMeterIdKey(t *testing.T) {
 	}
 }
 
+func TestLowLatencyBuffer_MeterIdKey(t *testing.T) {
+	tests := []struct {
+		line string
+		key  string
+		ok   bool
+	}{
+		{line: "g:test.metric:1", key: "test.metric", ok: true},
+		{line: "g,60:test.metric:1", key: "test.metric", ok: true},
+		{line: "A:test.metric:1", key: "test.metric", ok: true},
+		// Unlike orderSensitiveMeterIdKey, commutative types yield an id
+		{line: "c:test.metric:1", key: "test.metric", ok: true},
+		{line: "d:test.metric:1", key: "test.metric", ok: true},
+		{line: "t:test.metric:1", key: "test.metric", ok: true},
+		{line: "gauge:test.metric:1", key: "test.metric", ok: true},
+		{line: "c:test.metric,app=foo:1", key: "test.metric,app=foo", ok: true},
+		// WriteLine passes the prefix alone, which ends with the value separator
+		{line: "c:test.metric:", key: "test.metric", ok: true},
+		{line: ":test.metric:1", key: "test.metric", ok: true},
+		{line: "message=1", ok: false},
+		{line: "g:test.metric", ok: false},
+		{line: "", ok: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.line, func(t *testing.T) {
+			key, ok := meterIdKey(test.line)
+			if ok != test.ok {
+				t.Fatalf("Expected ok=%t, got %t", test.ok, ok)
+			}
+			if key != test.key {
+				t.Fatalf("Expected key %q, got %q", test.key, key)
+			}
+		})
+	}
+}
+
 func TestLowLatencyBuffer_RoundRobinsSameCounterId(t *testing.T) {
 	shards := runtime.NumCPU()
 	if shards < 2 {
@@ -378,5 +416,338 @@ func TestLowLatencyBuffer_ChunkBoundaries_OverMaxSizeIsDropped(t *testing.T) {
 	lines := splitAndFilterMetricLines(memWriter)
 	if len(lines) != 0 {
 		t.Errorf("Expected %d lines, got %d", 0, len(lines))
+	}
+}
+
+// captureLogger records Infof messages, so the rate limited overflow log lines can be
+// inspected.
+type captureLogger struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+var _ logger.Logger = (*captureLogger)(nil)
+
+func (l *captureLogger) Debugf(_ string, _ ...interface{}) {}
+
+func (l *captureLogger) Infof(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.messages = append(l.messages, fmt.Sprintf(format, v...))
+}
+
+func (l *captureLogger) Errorf(_ string, _ ...interface{}) {}
+
+// overflowMessages returns the overflow log lines, discarding the initialization message.
+func (l *captureLogger) overflowMessages() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var messages []string
+	for _, message := range l.messages {
+		if strings.Contains(message, "LowLatencyBuffer overflow") {
+			messages = append(messages, message)
+		}
+	}
+	return messages
+}
+
+// newSingleChunkBuffer creates a buffer with one chunk per shard and a long flush interval
+// timer, to allow for manual flush trigger. One chunk per shard means a single chunkSize
+// line fills a shard, and every subsequent line written to it is dropped.
+func newSingleChunkBuffer(t *testing.T, memWriter *MemoryWriter, log logger.Logger) *LowLatencyBuffer {
+	t.Helper()
+	shards := runtime.NumCPU()
+	bufferSize := 2 * chunkSize * shards // two buffer sets, one 60 KB chunk/shard
+	buffer := NewLowLatencyBuffer(memWriter, log, bufferSize, 3*time.Minute)
+	t.Cleanup(buffer.Close)
+	return buffer
+}
+
+// appendToShard writes a line to a specific shard, bypassing shard selection, so tests can
+// drive overflows deterministically regardless of the number of CPUs.
+func appendToShard(t *testing.T, buffer *LowLatencyBuffer, shard *bufferShard, line string) {
+	t.Helper()
+	state := buffer.activeBufferState.Load()
+	active := buffer.backBuffers
+	if frontBuffersActive(state) {
+		active = buffer.frontBuffers
+	}
+	if !slices.Contains(active, shard) {
+		t.Fatalf("Expected shard for line %q to be in the active buffer set", line)
+	}
+	if !shard.appendLine(&buffer.activeBufferState, state, line, "") {
+		t.Fatalf("Expected line %q to be accepted by the active buffer set", line)
+	}
+}
+
+// fillShard writes one chunkSize line to the shard, which leaves the shard with data to
+// flush and no room for any further line.
+func fillShard(t *testing.T, buffer *LowLatencyBuffer, shard *bufferShard) {
+	t.Helper()
+	const prefix = "g:overflow.fill:"
+	appendToShard(t, buffer, shard, prefix+strings.Repeat("1", chunkSize-len(prefix)))
+
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if shard.overflows != 0 {
+		t.Fatalf("Expected the fill line to be stored, got %d overflow(s)", shard.overflows)
+	}
+}
+
+func TestBufferShard_RecordOverflowCountsAndSamples(t *testing.T) {
+	shard := &bufferShard{}
+
+	shard.recordOverflow("g:first.dropped:1", 17)
+	shard.recordOverflow("g:second.dropped:1", 18)
+
+	if shard.overflows != 2 {
+		t.Errorf("Expected %d overflows, got %d", 2, shard.overflows)
+	}
+	if shard.overflowBytes != 35 {
+		t.Errorf("Expected %d overflow bytes, got %d", 35, shard.overflowBytes)
+	}
+	if shard.droppedSampleId != "first.dropped" && shard.droppedSampleId != "second.dropped" {
+		t.Errorf("Expected a dropped meter id to be sampled, got %q", shard.droppedSampleId)
+	}
+}
+
+func TestBufferShard_RecordOverflowSampleWeightedByVolume(t *testing.T) {
+	// One drop of a rare meter followed by many of a common meter. Sampling the first drop
+	// would always pick the rare meter; a volume weighted sample should almost always pick
+	// the common one.
+	const trials = 200
+	common := 0
+	for i := 0; i < trials; i++ {
+		shard := &bufferShard{}
+		shard.recordOverflow("g:rare.meter:1", 1)
+		for j := 0; j < 99; j++ {
+			shard.recordOverflow("c:common.meter:1", 1)
+		}
+		if shard.droppedSampleId == "common.meter" {
+			common++
+		}
+	}
+	if common < trials/2 {
+		t.Errorf("Expected the sample to favor the high volume meter, got it in %d of %d trials", common, trials)
+	}
+}
+
+func TestBufferShard_RecordOverflowSampleIsBounded(t *testing.T) {
+	shard := &bufferShard{}
+	// Malformed line, no ':' separators, so the line itself is sampled
+	line := "bad\n" + strings.Repeat("x", 2*maxSampleIdLen)
+	shard.recordOverflow(line, len(line))
+
+	if len(shard.droppedSampleId) != maxSampleIdLen {
+		t.Errorf("Expected sample of %d bytes, got %d", maxSampleIdLen, len(shard.droppedSampleId))
+	}
+	if !strings.HasPrefix(line, shard.droppedSampleId) {
+		t.Errorf("Expected sample to be a prefix of the line, got %q", shard.droppedSampleId)
+	}
+}
+
+// assertLines verifies that each expected line was written to the MemoryWriter.
+func assertLines(t *testing.T, memWriter *MemoryWriter, expected ...string) {
+	t.Helper()
+	lines := memWriter.Lines()
+	for _, want := range expected {
+		if !slices.Contains(lines, want) {
+			t.Errorf("Expected metric line %q in MemoryWriter, got %v", want, lines)
+		}
+	}
+}
+
+func TestLowLatencyBuffer_OverflowLogReportsDropsAndSample(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	buffer := newSingleChunkBuffer(t, memWriter, log)
+
+	shard := buffer.frontBuffers[0]
+	fillShard(t, buffer, shard)
+
+	dropped := []string{"g:overflow.dropped:1", "g:overflow.dropped:2", "g:overflow.dropped:3"}
+	// The first drop advances past the full chunk, which also counts its separator
+	droppedBytes := 1
+	for _, line := range dropped {
+		appendToShard(t, buffer, shard, line)
+		droppedBytes += len(line)
+	}
+
+	buffer.swapAndFlush()
+
+	messages := log.overflowMessages()
+	if len(messages) != 1 {
+		t.Fatalf("Expected 1 overflow log line for the flush window, got %d: %v", len(messages), messages)
+	}
+	message := messages[0]
+	for _, want := range []string{
+		fmt.Sprintf("dropped %d lines (%d bytes)", len(dropped), droppedBytes),
+		`sample dropped meter id: "overflow.dropped"`,
+	} {
+		if !strings.Contains(message, want) {
+			t.Errorf("Expected overflow log line to contain %q, got %q", want, message)
+		}
+	}
+
+	assertLines(t, memWriter,
+		fmt.Sprintf("c:spectator-go.lowLatencyBuffer.overflows,bufferSet=front:%d", len(dropped)),
+		fmt.Sprintf("d:spectator-go.lowLatencyBuffer.overflowBytes,bufferSet=front:%d", droppedBytes),
+	)
+}
+
+func TestLowLatencyBuffer_OverflowResetsBetweenWindows(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	buffer := newSingleChunkBuffer(t, memWriter, log)
+	buffer.overflowLogInterval = 0
+
+	shard := buffer.frontBuffers[0]
+	fillShard(t, buffer, shard)
+	appendToShard(t, buffer, shard, "g:first.dropped:1")
+	buffer.swapAndFlush()
+
+	// Front buffers are flushed and back buffers are active for the second window
+	shard = buffer.backBuffers[0]
+	fillShard(t, buffer, shard)
+	appendToShard(t, buffer, shard, "g:second.dropped:1")
+	buffer.swapAndFlush()
+
+	messages := log.overflowMessages()
+	if len(messages) != 2 {
+		t.Fatalf("Expected 2 overflow log lines, got %d: %v", len(messages), messages)
+	}
+	if !strings.Contains(messages[1], `dropped 1 lines`) || !strings.Contains(messages[1], `"second.dropped"`) {
+		t.Errorf("Expected second log line to only report the second window, got %q", messages[1])
+	}
+	assertLines(t, memWriter,
+		"c:spectator-go.lowLatencyBuffer.overflows,bufferSet=front:1",
+		"c:spectator-go.lowLatencyBuffer.overflows,bufferSet=back:1",
+	)
+}
+
+func TestLowLatencyBuffer_OverflowReportedForShardWithOnlyOversizedLine(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	buffer := newSingleChunkBuffer(t, memWriter, log)
+
+	// The oversized line is dropped, leaving the shard with no data to flush
+	shard := buffer.frontBuffers[0]
+	line := "g:oversized.metric:" + strings.Repeat("1", chunkSize)
+	appendToShard(t, buffer, shard, line)
+	buffer.swapAndFlush()
+
+	shard.mu.Lock()
+	overflows, sampleId := shard.overflows, shard.droppedSampleId
+	shard.mu.Unlock()
+	if overflows != 0 || sampleId != "" {
+		t.Errorf("Expected shard overflow state to be reset, got overflows=%d sample=%q", overflows, sampleId)
+	}
+
+	messages := log.overflowMessages()
+	if len(messages) != 1 || !strings.Contains(messages[0], `"oversized.metric"`) {
+		t.Errorf("Expected an overflow log line naming the oversized meter, got %v", messages)
+	}
+	assertLines(t, memWriter,
+		"c:spectator-go.lowLatencyBuffer.overflows,bufferSet=front:1",
+		fmt.Sprintf("d:spectator-go.lowLatencyBuffer.overflowBytes,bufferSet=front:%d", len(line)),
+	)
+}
+
+func TestLowLatencyBuffer_OverflowLogIsRateLimited(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	buffer := newSingleChunkBuffer(t, memWriter, log)
+
+	dropInWindow := func(shard *bufferShard, line string) {
+		fillShard(t, buffer, shard)
+		appendToShard(t, buffer, shard, line)
+		buffer.swapAndFlush()
+	}
+
+	dropInWindow(buffer.frontBuffers[0], "g:first.dropped:1")
+	dropInWindow(buffer.backBuffers[0], "g:second.dropped:1")
+	if messages := log.overflowMessages(); len(messages) != 1 {
+		t.Fatalf("Expected the second window to be rate limited, got %d log lines: %v", len(messages), messages)
+	}
+
+	// Once the interval has elapsed, the next log line reports drops accumulated since the last one
+	buffer.lastOverflowLog = buffer.lastOverflowLog.Add(-buffer.overflowLogInterval)
+	dropInWindow(buffer.frontBuffers[0], "g:third.dropped:1")
+	messages := log.overflowMessages()
+	if len(messages) != 2 {
+		t.Fatalf("Expected 2 overflow log lines, got %d: %v", len(messages), messages)
+	}
+	if !strings.Contains(messages[1], "dropped 2 lines") {
+		t.Errorf("Expected the log line to include the rate limited window, got %q", messages[1])
+	}
+
+	// Metrics are still reported for every window
+	assertLines(t, memWriter,
+		"c:spectator-go.lowLatencyBuffer.overflows,bufferSet=front:1",
+		"c:spectator-go.lowLatencyBuffer.overflows,bufferSet=back:1",
+	)
+}
+
+func TestLowLatencyBuffer_OverflowLogReportsHeldDropsAfterOverflowStops(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	buffer := newSingleChunkBuffer(t, memWriter, log)
+
+	shard := buffer.frontBuffers[0]
+	fillShard(t, buffer, shard)
+	appendToShard(t, buffer, shard, "g:first.dropped:1")
+	buffer.swapAndFlush()
+
+	shard = buffer.backBuffers[0]
+	fillShard(t, buffer, shard)
+	appendToShard(t, buffer, shard, "g:second.dropped:1")
+	buffer.swapAndFlush()
+	if messages := log.overflowMessages(); len(messages) != 1 {
+		t.Fatalf("Expected the second window to be rate limited, got %d log lines: %v", len(messages), messages)
+	}
+
+	// No further drops, but the held drops are reported once the interval has elapsed
+	buffer.lastOverflowLog = buffer.lastOverflowLog.Add(-buffer.overflowLogInterval)
+	buffer.swapAndFlush()
+	messages := log.overflowMessages()
+	if len(messages) != 2 {
+		t.Fatalf("Expected 2 overflow log lines, got %d: %v", len(messages), messages)
+	}
+	if !strings.Contains(messages[1], "dropped 1 lines") || !strings.Contains(messages[1], `"second.dropped"`) {
+		t.Errorf("Expected the log line to report the held drops, got %q", messages[1])
+	}
+
+	// Nothing is pending, so later windows do not log
+	buffer.lastOverflowLog = buffer.lastOverflowLog.Add(-buffer.overflowLogInterval)
+	buffer.swapAndFlush()
+	if messages := log.overflowMessages(); len(messages) != 2 {
+		t.Errorf("Expected no further overflow log lines, got %d: %v", len(messages), messages)
+	}
+}
+
+func TestLowLatencyBuffer_OverflowLogReportsHeldDropsOnClose(t *testing.T) {
+	memWriter := &MemoryWriter{}
+	log := &captureLogger{}
+	shards := runtime.NumCPU()
+	bufferSize := 2 * chunkSize * shards // two buffer sets, one 60 KB chunk/shard
+	buffer := NewLowLatencyBuffer(memWriter, log, bufferSize, 3*time.Minute)
+
+	shard := buffer.frontBuffers[0]
+	fillShard(t, buffer, shard)
+	appendToShard(t, buffer, shard, "g:first.dropped:1")
+	buffer.swapAndFlush()
+
+	// Rate limited, so held until the final flush on Close
+	shard = buffer.backBuffers[0]
+	fillShard(t, buffer, shard)
+	appendToShard(t, buffer, shard, "g:second.dropped:1")
+	buffer.Close()
+
+	messages := log.overflowMessages()
+	if len(messages) != 2 {
+		t.Fatalf("Expected 2 overflow log lines, got %d: %v", len(messages), messages)
+	}
+	if !strings.Contains(messages[1], "dropped 1 lines") || !strings.Contains(messages[1], `"second.dropped"`) {
+		t.Errorf("Expected the final log line to report the held drops, got %q", messages[1])
 	}
 }
