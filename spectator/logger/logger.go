@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 )
@@ -23,15 +24,21 @@ func NewDefaultLogger() *DefaultLogger {
 
 // Debugf is for debug level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Debugf(format string, v ...interface{}) {
-	slog.Debug(fmt.Sprintf(format, v...))
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		slog.Debug(fmt.Sprintf(format, v...))
+	}
 }
 
 // Infof is for info level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Infof(format string, v ...interface{}) {
-	slog.Info(fmt.Sprintf(format, v...))
+	if slog.Default().Enabled(context.Background(), slog.LevelInfo) {
+		slog.Info(fmt.Sprintf(format, v...))
+	}
 }
 
 // Errorf is for error level messages. Satisfies Logger interface.
 func (l *DefaultLogger) Errorf(format string, v ...interface{}) {
-	slog.Error(fmt.Sprintf(format, v...))
+	if slog.Default().Enabled(context.Background(), slog.LevelError) {
+		slog.Error(fmt.Sprintf(format, v...))
+	}
 }
