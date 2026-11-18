@@ -93,3 +93,23 @@ func TestLineBuffer_FlushesOnClose(t *testing.T) {
 		}
 	}
 }
+
+func TestLineBuffer_TimerDoesNotFlushAfterClose(t *testing.T) {
+	// Close can run while a timer callback that has already fired is waiting
+	// for the lock. Stop cannot cancel that callback, so it must not flush or
+	// reschedule the timer once the buffer is closed. Use a short flush interval
+	// and repeat to make it likely that the timer fires during Close.
+	for i := 0; i < 200; i++ {
+		memWriter := &MemoryWriter{}
+		buffer := NewLineBuffer(memWriter, logger.NewDefaultLogger(), 1000, 50*time.Microsecond)
+		time.Sleep(time.Duration(i%10) * 10 * time.Microsecond)
+		buffer.Close()
+
+		buffer.Write("after-close")
+		time.Sleep(time.Millisecond)
+
+		if lines := memWriter.Lines(); len(lines) != 0 {
+			t.Fatalf("iteration %d: expected no lines flushed after Close, got %d: %s", i, len(lines), lines)
+		}
+	}
+}

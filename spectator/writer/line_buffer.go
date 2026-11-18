@@ -18,6 +18,7 @@ type LineBuffer struct {
 	flushInterval time.Duration
 	lastFlush     time.Time
 	flushTimer    *time.Timer
+	closed        bool
 
 	mu sync.Mutex
 }
@@ -34,7 +35,11 @@ func NewLineBuffer(writer Writer, logger logger.Logger, bufferSize int, flushInt
 		lastFlush:     time.Now(),
 	}
 
+	// The timer callback reassigns flushTimer under the lock, and may run
+	// before AfterFunc returns when the flush interval is very short.
+	lb.mu.Lock()
 	lb.startFlushTimer()
+	lb.mu.Unlock()
 
 	return lb
 }
@@ -127,6 +132,13 @@ func (lb *LineBuffer) flushLocked() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
+	// The timer may fire while Close is running: Stop cannot cancel a callback
+	// that has already started, and the callback then blocks on the mutex until
+	// Close returns. Do not flush or reschedule the timer once closed.
+	if lb.closed {
+		return
+	}
+
 	if time.Since(lb.lastFlush) >= lb.flushInterval {
 		lb.flush()
 	}
@@ -152,6 +164,7 @@ func (lb *LineBuffer) Close() {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
+	lb.closed = true
 	if lb.flushTimer != nil {
 		lb.flushTimer.Stop()
 	}
