@@ -294,3 +294,28 @@ func TestConcurrentWrites(t *testing.T) {
 		}
 	}
 }
+
+func TestUdpWriter_LineBufferFlushFitsInDatagram(t *testing.T) {
+	// The largest UDP payload is 65507 bytes; a LineBuffer flush can be one line larger than its size.
+	const maxUdpPayload = 65507
+	for _, size := range []int{1024, 61440, 65500, 65536} {
+		writer, _ := NewUdpWriterWithBuffer("localhost:5000", logger.NewDefaultLogger(), size, time.Hour)
+		if writer.lineBuffer == nil {
+			t.Fatalf("size %d: expected LineBuffer", size)
+		}
+
+		memWriter := &MemoryWriter{}
+		buffer := NewLineBuffer(memWriter, logger.NewDefaultLogger(), writer.lineBuffer.bufferSize, time.Hour)
+		line := "c:server.requestCount,app=demo,id=000000:1"
+		for i := 0; i < 5000; i++ {
+			buffer.Write(line)
+		}
+		for _, flushed := range memWriter.Lines() {
+			if len(flushed) > maxUdpPayload {
+				t.Errorf("size %d: flushed %d bytes, larger than one UDP datagram", size, len(flushed))
+				break
+			}
+		}
+		_ = writer.Close()
+	}
+}

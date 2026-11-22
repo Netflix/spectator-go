@@ -40,7 +40,7 @@ func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int
 	var lineBuffer *LineBuffer
 	var lowLatencyBuffer *LowLatencyBuffer
 	if bufferSize > 0 && bufferSize <= 65536 {
-		lineBuffer = NewLineBuffer(&udpBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
+		lineBuffer = NewLineBuffer(&udpBufferWriter{baseWriter}, logger, udpLineBufferSize(bufferSize, logger), flushInterval)
 	} else if bufferSize > 0 {
 		lowLatencyBuffer = NewLowLatencyBuffer(&udpBufferWriter{baseWriter}, logger, bufferSize, flushInterval)
 	}
@@ -48,6 +48,20 @@ func NewUdpWriterWithBuffer(address string, logger logger.Logger, bufferSize int
 	baseWriter.lowLatencyBuffer = lowLatencyBuffer
 
 	return baseWriter, nil
+}
+
+// maxUdpLineBufferSize caps the LineBuffer size for UDP. The LineBuffer flushes after the line that
+// reaches its size, so a flush can be up to one line larger than the buffer size, and a UDP datagram
+// carries at most 65507 bytes. Any larger flush fails with EMSGSIZE and all of its lines are lost.
+// 60KB leaves room for one more protocol line, like the LowLatencyBuffer chunks.
+const maxUdpLineBufferSize = chunkSize
+
+func udpLineBufferSize(bufferSize int, logger logger.Logger) int {
+	if bufferSize > maxUdpLineBufferSize {
+		logger.Infof("Reduce UDP LineBuffer size from %d to %d bytes, so that each flush fits in one datagram", bufferSize, maxUdpLineBufferSize)
+		return maxUdpLineBufferSize
+	}
+	return bufferSize
 }
 
 func (u *UdpWriter) Write(line string) {
